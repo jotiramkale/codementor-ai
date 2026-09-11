@@ -14,3 +14,5 @@ What was carried forward into the new architecture, and where:
 | `GROQ_API_KEY` handling                            | Will move to backend `.env` — see root `.env.example` |
 
 Nothing here is deleted permanently; it's just no longer the live UI.
+
+vx

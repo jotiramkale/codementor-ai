@@ -12,7 +12,8 @@ import { communityStatsForProblem, estimatePercentile } from '../utils/community
 import { MOCK_PROBLEMS, DEFAULT_STARTER_CODE } from '../data/problemsMockData.js'
 import { labelForLanguage } from '../data/languages.js'
 import { runSample, submitSolution } from '../services/submissionService.js'
-import { reviewSubmission } from '../services/aiService.js'
+import { reviewSubmission, getHint, debugError } from '../services/aiService.js'
+import { isPassingStatus } from '../utils/testStatus.js'
 
 // Phase 10: adds the full AI Review panel (Overall Assessment, Bug
 // Analysis, Time/Space Complexity, Code Quality, Suggested Improvement,
@@ -23,7 +24,6 @@ import { reviewSubmission } from '../services/aiService.js'
 function ProblemDetail() {
   const { id } = useParams()
   const problem = MOCK_PROBLEMS.find((p) => String(p.id) === id)
-  const [showHints, setShowHints] = useState(false)
 
   const starterCode = problem?.starterCode || DEFAULT_STARTER_CODE
   const [language, setLanguage] = useState('python')
@@ -39,6 +39,12 @@ function ProblemDetail() {
   const [isReviewing, setIsReviewing] = useState(false)
   const [aiReview, setAiReview] = useState(null)
   const [aiReviewError, setAiReviewError] = useState('')
+
+  const [revealedHints, setRevealedHints] = useState([])
+  const [isLoadingHint, setIsLoadingHint] = useState(false)
+
+  const [isDebugging, setIsDebugging] = useState(false)
+  const [debugResult, setDebugResult] = useState(null)
 
   // started_at for this problem-solving session. Resets if you navigate
   // away and back (a fresh page load), since nothing persists it yet.
@@ -65,6 +71,8 @@ function ProblemDetail() {
   const currentCode = codeByLanguage[language]
   const elapsedSeconds = Math.floor((now - startedAt) / 1000)
   const communityStats = communityStatsForProblem(problem)
+  const latestTestResults = normalizeTestResultsForReview()
+  const hasRecentFailure = Boolean(latestTestResults && !isPassingStatus(latestTestResults.status))
 
   function handleCodeChange(value) {
     setCodeByLanguage((prev) => ({ ...prev, [language]: value }))
@@ -164,6 +172,30 @@ function ProblemDetail() {
     }
   }
 
+  async function handleGetHint(level) {
+    setIsLoadingHint(true)
+    try {
+      const result = await getHint({ problem, hintLevel: level })
+      setRevealedHints((prev) => [...prev, { level, content: result.content }])
+    } finally {
+      setIsLoadingHint(false)
+    }
+  }
+
+  async function handleDebug() {
+    setIsDebugging(true)
+    try {
+      const result = await debugError({
+        code: currentCode,
+        language,
+        testResults: normalizeTestResultsForReview(),
+      })
+      setDebugResult(result)
+    } finally {
+      setIsDebugging(false)
+    }
+  }
+
   return (
     <div>
       <Link to="/problems" className="mb-4 inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-200">
@@ -235,23 +267,27 @@ function ProblemDetail() {
             )}
           </Panel>
 
-          {hasFullDetail && (
-            <Panel title="Hints">
-              {showHints ? (
-                <ul className="flex flex-col gap-2">
-                  {problem.hints.map((hint, index) => (
-                    <li key={index} className="text-sm text-zinc-400">
-                      <span className="text-zinc-500">{index + 1}.</span> {hint}
-                    </li>
-                  ))}
-                </ul>
+          <Panel title="AI Hints" action={<Badge tone="ai">AI</Badge>}>
+            <div className="flex flex-col gap-3">
+              {revealedHints.map((hint) => (
+                <div key={hint.level} className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
+                  <p className="mb-1 text-xs font-medium text-zinc-500">Hint {hint.level}</p>
+                  <p className="text-sm text-zinc-300">{hint.content}</p>
+                </div>
+              ))}
+
+              {revealedHints.length < 3 ? (
+                <Button variant="ai" onClick={() => handleGetHint(revealedHints.length + 1)} disabled={isLoadingHint}>
+                  {isLoadingHint ? 'Thinking…' : `Get Hint ${revealedHints.length + 1}`}
+                </Button>
               ) : (
-                <button type="button" onClick={() => setShowHints(true)} className="text-sm text-indigo-400 hover:text-indigo-300">
-                  Reveal hints
-                </button>
+                <p className="text-xs text-zinc-600">
+                  That's as far as hints go in this demo — a full worked solution isn't offered yet
+                  (Phase 22 will let you ask for one explicitly, separately from hints).
+                </p>
               )}
-            </Panel>
-          )}
+            </div>
+          </Panel>
         </div>
 
         <div className="flex flex-col gap-4">
@@ -389,6 +425,27 @@ function ProblemDetail() {
           )}
         </div>
       </div>
+
+      {hasRecentFailure && (
+        <Panel title="AI Debugger" className="mt-4" action={<Badge tone="ai">AI</Badge>}>
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <Button variant="ai" onClick={handleDebug} disabled={isDebugging}>
+              {isDebugging ? 'Analyzing…' : 'Debug with AI'}
+            </Button>
+            <span className="text-xs text-zinc-500">
+              Explains what's likely going wrong — it won't rewrite your solution for you.
+            </span>
+          </div>
+
+          {debugResult && (
+            <div className="flex flex-col gap-4">
+              {debugResult.isMock && <Badge tone="neutral">MOCK RESPONSE</Badge>}
+              <ReviewSection title="Likely Cause" content={debugResult.likelyCause} />
+              <ReviewSection title="Debugging Direction" content={debugResult.debuggingDirection} />
+            </div>
+          )}
+        </Panel>
+      )}
 
       <Panel title="AI Review" className="mt-4" action={<Badge tone="ai">AI</Badge>}>
         <div className="mb-4 flex flex-wrap items-center gap-3">

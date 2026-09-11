@@ -3,11 +3,11 @@
 AI-powered DSA learning, code review, debugging and mentoring platform.
 Final-year B.Tech CSE project, built in phases.
 
-**Current status: Phase 10 complete** — a full 7-section AI Review
-panel on the problem page, grounded in real Run/Submit results so it
-never claims code passed unless execution data says so. See
-`legacy/README.md` for how the original prototype maps onto this
-structure.
+**Current status: Phase 17 complete** — a timed mock Interview Mode
+with an AI interviewer, a controlled single hint, and a performance
+summary — built almost entirely from real pieces earlier phases already
+created. See `legacy/README.md` for how the original prototype maps
+onto this structure.
 
 ## Folder structure
 
@@ -17,17 +17,18 @@ src/
                 NotificationsMenu, ProfileMenu, ProtectedRoute,
                 ProblemCard, and components/ui/ (Button, Avatar, Badge,
                 IconButton, EmptyState, Panel, StatCard, FilterChip)
-  pages/        Dashboard (Phase 4), Problems + ProblemDetail (Phase 5/6,
-                real), Practice, AiMentor, Interview, Progress, Profile
-                (Practice hosts the working review flow; AiMentor/
-                Interview/Progress/Profile are still placeholders) and
+  pages/        Dashboard (Phase 4), Problems + ProblemDetail (Phase
+                5-11, real), AiMentor (Phase 12/13/15, real), Profile
+                (Phase 14, real), Progress (Phase 16, real), Interview
+                (Phase 17, real), Practice (Phase 1, real) and
                 pages/auth/ (SignIn, SignUp, ForgotPassword, ResetPassword)
+                — all 7 main nav destinations are real pages now
   layouts/      AppShell.jsx (signed-in shell) and AuthLayout.jsx
                 (centered layout for the auth pages)
   hooks/        custom React hooks (empty — later phases)
   services/     all API/data access lives here, nowhere else
-  utils/        difficulty.js, time.js, communityStats.js (all pure,
-                no React/API dependencies)
+  utils/        difficulty.js, time.js, communityStats.js, testStatus.js
+                (shared pass/fail check used by AI Review + AI Debugger)
   data/         navigation.js, dashboardMockData.js, problemsMockData.js,
                 languages.js (shared editor language list)
   context/      AuthContext.jsx — mock auth state via useAuth()
@@ -84,6 +85,252 @@ Frontend-only mock — no backend or JWT exists yet:
   them signed out redirects to Sign in and returns you to where you were
   headed after signing in.
 - Log out (in the profile menu) actually clears the mock session now.
+
+## Interview Mode (Phase 17)
+
+A real timed session: setup (difficulty + topic focus) → session (timer,
+problem, AI interviewer chat, code editor, one controlled hint) →
+performance summary (execution result, time-vs-limit, AI feedback in 4
+sections). Almost none of this invents new mock machinery — it reuses
+what already exists and works:
+- The **code editor** is the exact same Monaco component from Phase 7.
+- **Scoring** runs through the exact same mock execution engine from
+  Phase 8 (`submissionService.js`) — an interview problem is still just
+  a problem.
+- The **one controlled hint** reuses Phase 11's real hint content
+  (always level 1 — the smallest clue, not the full graduated menu),
+  capped at 1 use per interview and shown in the summary, which is what
+  "hints with controlled availability" means here: a real, visible cost,
+  not an unlimited helper.
+
+**On "company/topic mode"**: there's no honest way to offer real
+company-specific question banks — that would mean claiming knowledge of
+how a specific real company actually interviews, with nothing real
+behind it. This implements the topic half for real (a genuine filter
+over the catalog) and treats no-topic-selected as the general,
+company-agnostic mode, rather than inventing fake company-branded
+content. Said plainly in the setup screen, not buried in a comment.
+
+**Voice, per the spec's explicit instruction**: architecture only, no
+implementation. `getInterviewerFollowUp()` accepts an `inputMode` option
+(`'text'` today) specifically so a real voice mode could pass
+transcribed text through the same function later without changing any
+call site; passing `'voice'` today throws rather than pretending to
+work. The mic button in the UI is visibly disabled with a tooltip
+explaining why.
+
+**Question pool, honestly scoped**: only the 6 problems with a full
+written statement (Phase 6) are used — an interview question with no
+real description would be a worse experience than a smaller, honest
+pool. Verified the picker falls back gracefully (rather than crashing
+or returning nothing) when a difficulty+topic combination matches none
+of those 6.
+
+## Learning Progress (Phase 16)
+
+Recharts finally gets used — deliberately held back since Phase 4,
+where I scoped Dashboard as the at-a-glance snapshot specifically so
+Progress would have a real, undiluted analytics job to do. The page
+covers every item from the spec: problems solved, accuracy, attempts,
+and streak as stat cards; a difficulty-distribution donut chart; a
+solving-time trend line chart; a topic-mastery bar chart across all 14
+topics; strong/weak topics; recent improvements; and AI recommendations.
+
+**Weak and strong topics are derived, not duplicated**: both lists come
+from slicing the same `MOCK_TOPIC_MASTERY` array the chart renders —
+lowest 3 and highest 3 — rather than being a second, separately
+hand-written list that could quietly drift out of sync with the chart.
+I verified this by actually running the derivation: confirmed it
+produces exactly Dynamic Programming, Sorting, and Graphs as the weak
+topics, matching Dashboard's weak topics from Phase 4 precisely,
+because I kept the numbers consistent between the two files on purpose
+(the same discipline as the Phase 5 Heaps/Sorting fix).
+
+**Data structures kept real-backend-shaped**: every dataset here is a
+flat array of plain objects (`{ topic, mastery }`, `{ week, minutes }`,
+`{ difficulty, solved }`) — the shape a `SELECT ... GROUP BY` would
+naturally produce, not a nested or UI-specific structure a real
+PostgreSQL-backed API would need to be redesigned around later.
+
+**A dependency caveat, same shape as Tailwind/Monaco/Framer Motion
+before it**: Recharts isn't installed in this sandbox either, so I
+externalized it for the import-graph check and verified the mock data
+itself (sorting, slicing, consistency) by actually executing it — but I
+have not seen these charts render. If a chart looks broken or a color
+seems off, tell me specifics.
+
+## Multi-Agent AI (Phase 15)
+
+`src/services/agentService.js` defines the 9 specialized agents from
+the spec as a real registry (id, role, status) and an `orchestrate()`
+function implementing: Request → Orchestrator → Select Agent → Agent
+Reasoning → (Groq) → Response → Critic/Reflection → Final Response.
+AI Mentor now calls this instead of the plain reply function directly,
+and shows **which agent handled each reply** plus what the critic did —
+both real values read from the orchestrator's trace, not staged for
+the demo.
+
+**"Do not implement fake autonomous behavior just for visual effect"**
+— the guardrail I kept coming back to while building this. Concretely:
+- Interview Agent, Problem Generator Agent, and Analytics Agent are
+  marked **Planned** and say so plainly when selected — they don't
+  pretend to answer with fabricated interview questions or generated
+  problems.
+- Code Review, Debug, and Hint Agents are marked **Active** but are
+  honest that a general chat message has no specific problem's code to
+  work with — they point you to that problem's page instead of
+  fabricating a review from nothing.
+- Learning Coach and Complexity Agents delegate to the *same real code*
+  Phases 12/13 already built (`chatWithMentor`, RAG retrieval) — the
+  orchestrator composes existing capability rather than duplicating or
+  re-answering.
+- The Reflection/Critic Agent is a genuine check, not a decorative
+  step: it re-runs the same correctness rule from Phase 10/11
+  (`isPassingStatus`) against any test-result claim in a draft reply,
+  independently of whichever agent produced it.
+
+**A real gap the orchestrator's own testing exposed**: routing a
+complexity question correctly selected the Complexity Agent, but its
+reply fell through to a generic fallback that didn't mention complexity
+at all — Phase 12's reply logic never had a complexity-specific branch.
+Selecting the right agent isn't worth much if that agent's answer
+doesn't actually address the question, so I added one and re-ran the
+exact same query to confirm the reply is now genuinely on-topic (and,
+via the existing RAG wiring, pulls in the Big-O knowledge entry too).
+
+## User Memory (Phase 14)
+
+The Profile page is real now: an Account panel (your actual signed-in
+name/email from Phase 3's auth — no need to fabricate this, it's real
+mock data already) and an **AI Memory** panel with the four sections
+from the spec: Strengths, Weak areas, Learned patterns, and Recent
+observations. `src/services/userService.js` gained a real `getMemory()`.
+
+**The architecture point of this phase, made concrete**: structured
+facts (solved counts, streaks) are meant for PostgreSQL later;
+qualitative observations like "struggles with recursion" are meant for
+ChromaDB, retrieved the same way `ragService.js`'s knowledge base will
+be once Phase 23 lands. This file is that second kind of store, built
+now with a deterministic stand-in instead of a real embedding index.
+
+**The rule this phase is actually about**: *"Never expose another
+user's memory."* `getMemory()` requires a `userId` and throws rather
+than silently returning something without one — there's no such thing
+as memory that isn't scoped to somebody. Every observation is
+deterministically derived *from* the userId (a simple hash seeds which
+demo observations get picked), so two different accounts genuinely see
+different fabricated memory, never a shared blob. I verified all of
+this by actually calling it: confirmed it throws with no userId and
+with an empty string, confirmed the same user gets identical memory
+across two calls (deterministic, not random noise), and confirmed two
+different users get different memory with no internal duplicates —
+output is in the phase report.
+
+Every claim in the AI Memory panel is prefaced as demo data, not a real
+assessment — worth being extra careful about here specifically, since
+this is the one place in the app that makes claims *about the person*
+rather than about their code.
+
+## RAG (Phase 13)
+
+`src/services/ragService.js` is a genuine retrieval pipeline, not a
+stub — just backed by a small, self-written knowledge base (10 entries
+across the 8 domains from the spec: DSA concepts, algorithms,
+complexity, patterns, common mistakes, hints, interview patterns,
+learning roadmaps) with simple keyword matching instead of real
+embeddings. `chatWithMentor()` (Phase 12) now actually calls it before
+replying, so retrieval genuinely shapes what comes back — this isn't
+wired up and then ignored.
+
+**The rule I was most careful about**: *"Do not fake citations to
+documents that don't exist."* Every single knowledge entry's source is
+labeled plainly as `"CodeMentor AI knowledge base (demo entry)"` — never
+attributed to an external book, article, or site. It would have been
+easy to make this feel more "real" by writing something like "Source:
+CLRS" or "Source: GeeksforGeeks," but that would be fabricating a
+citation this app has no actual right to claim, so I didn't.
+
+**Frontend RAG status UI**, per the spec's four asks:
+- **Retrieved context**: shown under any AI Mentor reply that used it
+- **Knowledge source**: labeled per entry (see above — always honest)
+- **Relevance**: a percentage per retrieved entry
+- **Generated explanation**: the mentor's reply itself, now informed by
+  what was retrieved
+- A separate "How the AI Mentor retrieves knowledge" panel always shows
+  the conceptual pipeline (Question → Retriever → Relevant Knowledge →
+  Prompt → LLM → Answer) and is upfront that today's retrieval is
+  keyword matching, not real search.
+
+**A gap I found and fixed by actually testing it**, not just reading
+the code: the literal suggested prompt on this page, "What should I
+study next?", retrieved nothing on my first pass — my keyword list had
+"what to study" but the natural phrasing was "study next," and a
+substring match needs the exact phrase to appear. I added "study next"
+as a keyword and re-ran it to confirm the fix — details in the phase
+report.
+
+## AI Mentor (Phase 12)
+
+The AI Mentor nav item is no longer a placeholder — it's a real chat
+interface (`src/pages/AiMentor.jsx`) with suggested starter prompts, a
+scrolling message history, and a send form. `aiService.js` gained
+`chatWithMentor()`.
+
+**Conversation history architecture, for real**: every request sends
+the *entire* message list, not just the latest turn — that's what a
+real multi-turn Groq call (Phase 22) needs, and I verified it actually
+works that way (a follow-up message gets a reply based on itself, not
+the first message in the thread — see the phase report). The response
+shape also included `ragContext` and `userMemoryUsed` fields from the
+start, always empty at the time — Phase 13 (below) is what actually
+started filling `ragContext` in; `userMemoryUsed` stays empty until
+Phase 14, with no changes needed to this page's code either time.
+
+**On the mock content**: rather than one generic canned reply for
+everything, I matched simple keywords so each of the 8 example query
+types from the spec (hint, why-wrong, optimal approach, what to study,
+improve, compare, explain-error, explain-concept) gets a distinct,
+topically relevant mock reply — verified all 8 (plus a random unrelated
+message) actually produce 9 different responses, not the same text
+nine times. It's still keyword matching, not real understanding, and
+every reply says so.
+
+Nothing here is saved: refreshing or leaving the page clears the
+conversation, same as everything else that doesn't have a backend yet.
+
+## AI Debugger + Hints (Phase 11)
+
+**AI Hints** (left column, next to the problem description): a graduated
+3-level system — Hint 1 is a small conceptual clue, Hint 2 a stronger
+direction, Hint 3 near-solution guidance. Only the next hint is ever
+offered at once (clean, one-button-at-a-time UX, not all revealed
+together). For the 6 detailed problems, Hints 1-2 use the real authored
+hints from Phase 6; every problem gets a Hint 3. **No full solution is
+offered anywhere in this demo** — fabricating one on the fly would mean
+generating algorithm code with no way to verify it's actually correct,
+which is a worse failure mode than not offering it at all. That
+capability is explicitly left for Phase 22, ideally paired with a real
+correctness check.
+
+**AI Debugger** (only appears after a failing Run or Submit — there's
+nothing to debug otherwise): explains a **Likely Cause** and a
+**Debugging Direction**. It does not rewrite your solution — that's not
+a tone choice, it's structural: the mock response has no
+"correctedCode" field at all, so a future real implementation can't
+accidentally slide into handing over a fix instead of an explanation.
+
+**A real bug I found and fixed while building this**: Phase 10's
+correctness check only recognized the literal strings `'Accepted'` and
+`'passed'`, but the normalizer that feeds it can also produce
+`'Passed sample tests'` (when only Run, not Submit, has been tried).
+That mismatch meant a genuinely passing sample-test result could get
+mislabeled by the AI Review as "not fully correct yet" — not a false
+claim of *success*, but a wrong claim in the *cautious* direction,
+which is still a bug. I extracted the passing-status check into one
+shared function (`utils/testStatus.js`) used by both the AI Review and
+the new AI Debugger, so the two features can't disagree about what
+counts as a pass, and verified the fix by actually running it (see the
+phase report) rather than trusting the read-through.
 
 ## AI Code Review (Phase 10)
 
@@ -212,21 +459,34 @@ disabled rather than silently doing nothing.
 
 ## What's real vs. mock vs. planned right now
 
-- **Real**: the shell, auth flow and route protection; the Practice
-  page; the Dashboard, Problems, and ProblemDetail pages; the Monaco
-  editor; the Run/Submit UX; the solving timer and submission history;
-  the AI Review panel's *behavior* (grounding correctness in real
-  execution results, never guessing) genuinely works as designed.
-- **Mock**: authentication, every Dashboard number, the entire problem
-  catalog, Run/Submit's execution results, the community time-comparison
-  stats, and the AI review's actual content (6 of 7 sections are
-  honestly-labeled generic placeholders; the 7th — Overall Assessment —
-  is dynamic but still template-based, not real analysis) — none of
-  this reflects a real backend, database, code execution, or LLM call.
-  All fabricated until Phase 19-22 build the real versions.
-- **Planned, visibly labeled as such**: AI Mentor, Interview, Progress,
-  Profile — each shows an empty state naming which phase builds it.
+- **Real**: the shell, auth flow and route protection; all 7 main nav
+  pages (Dashboard, Problems/ProblemDetail, AiMentor, Interview,
+  Progress, Profile, Practice); the Monaco editor; the Run/Submit UX;
+  the solving timer and submission history; the AI Review, AI Hints, AI
+  Debugger, AI Mentor, RAG retrieval, User Memory, multi-agent
+  orchestrator, and Interview Mode's *behavior* (grounding in real
+  execution results where applicable, graduated disclosure, real
+  multi-turn conversation history, real keyword-based retrieval feeding
+  real replies, memory genuinely scoped per user, real agent routing
+  with an honest response for agents not yet built, a real timer and a
+  real controlled-hint limit) genuinely works as designed; the Profile
+  page's account panel shows your real (mock) signed-in identity.
+- **Mock**: authentication, every Dashboard/Progress number, the entire
+  problem catalog, Run/Submit's execution results (also what scores an
+  interview), community time-comparison stats, and the content each AI
+  feature ultimately produces (reviews, hints, debug explanations,
+  mentor replies, the RAG knowledge base, AI Memory observations, and
+  interview feedback) — none of this reflects a real backend, database,
+  code execution, or LLM call. All fabricated until Phase 19-24 build
+  the real versions.
+- **Planned, visibly labeled as such**: the Interview/Problem
+  Generator/Analytics *agents* specifically (visible in the AI Team
+  panel, honest when selected that they're not built), and voice input
+  in Interview Mode (architecture only, per the spec's explicit
+  instruction not to build it yet).
 - **Not implemented**: global search (visually present, disabled),
-  notifications (a genuine empty state), and persistence of anything
-  (solving time, submission history, solved status, AI reviews) beyond
-  the current page visit — that needs the real backend (Phase 19+/20).
+  notifications (a genuine empty state), a full-solution reveal, real
+  embeddings/ChromaDB (Phase 23), voice interviews, and persistence of
+  anything beyond the current page visit (including AI Memory and
+  Progress's numbers — both recomputed fresh each time, not actually
+  stored) — that needs the real backend (Phase 19+/20/24).

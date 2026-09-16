@@ -32,6 +32,7 @@
 
 import { isPassingStatus } from '../utils/testStatus.js'
 import { retrieveContext } from './ragService.js'
+import { TOPICS } from '../data/problemsMockData.js'
 
 const USE_MOCK = true // flips to false once the FastAPI endpoint exists (Phase 19+/22)
 
@@ -445,4 +446,41 @@ function mockMentorReply(userText) {
     'Try asking about a hint, an error, what to study next, or comparing two approaches — I ' +
     'have a slightly more specific canned reply for each of those in this demo.'
   )
+}
+
+/**
+ * Phase 18: mock "Generate Problem" for the admin panel. Deliberately
+ * produces a rough, generic draft with placeholder example/constraint/
+ * hint text rather than a polished-looking fake — the point of "review
+ * generated problems" in the spec is that an admin has to actually read
+ * and rewrite it before publishing, not rubber-stamp something that
+ * already looks finished. A real generator (Phase 22) would produce
+ * complete, verified content instead of this template.
+ *
+ * @param {{ topic?: string, difficulty?: 'Easy'|'Medium'|'Hard' }} params
+ */
+export async function generateProblemDraft({ topic, difficulty } = {}) {
+  await new Promise((resolve) => setTimeout(resolve, 1000))
+
+  const chosenTopic = topic || TOPICS[Math.floor(Math.random() * TOPICS.length)]
+  const chosenDifficulty = difficulty || 'Medium'
+  const estimatedTime = chosenDifficulty === 'Easy' ? '15m' : chosenDifficulty === 'Hard' ? '40m' : '25m'
+
+  return {
+    isMock: true,
+    draft: {
+      title: `New ${chosenTopic} Problem (draft — rename before publishing)`,
+      difficulty: chosenDifficulty,
+      topic: chosenTopic,
+      estimatedTime,
+      description:
+        `This is a mock response — a generic ${chosenTopic} placeholder, not a real problem ` +
+        'statement. Rewrite this completely before publishing.',
+      expectedInput: 'TODO — describe the real input shape.',
+      expectedOutput: 'TODO — describe the real output shape.',
+      examples: [{ input: 'TODO', output: 'TODO', explanation: 'Replace with a real worked example.' }],
+      constraints: ['TODO: add real constraints'],
+      hints: ['TODO: add a real hint'],
+    },
+  }
 }

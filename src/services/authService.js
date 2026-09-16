@@ -6,13 +6,19 @@
  * the UI, routing, and AuthContext can be built against a stable
  * contract now and reconnected to the real thing later.
  *
- * A mock session (name + email only — NEVER a password) is kept in
+ * A mock session (name + email + role — NEVER a password) is kept in
  * localStorage purely so you aren't logged out on every page refresh
  * while testing. This is a deliberate shortcut for a mock, not a
  * recommendation for real JWTs: a real token is safer in an httpOnly
  * cookie than in localStorage, where any script on the page can read
  * it. Revisit this choice explicitly when Phase 19+/24 wires up the
  * real backend.
+ *
+ * Phase 18: added a role ('student' | 'admin'). With no real backend
+ * to check actual permissions against, the demo makes this an explicit
+ * checkbox on the sign-in/sign-up forms rather than a hidden trick
+ * (like a magic email string) — visible and honest about being a demo
+ * mechanism, not a real authorization system.
  */
 
 const SESSION_KEY = 'codementor_mock_session'
@@ -22,7 +28,7 @@ function delay(ms = MOCK_DELAY_MS) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-export async function signIn({ email, password }) {
+export async function signIn({ email, password, isAdmin = false }) {
   await delay()
 
   if (!email || !password) {
@@ -34,12 +40,12 @@ export async function signIn({ email, password }) {
     throw new Error('Incorrect email or password.')
   }
 
-  const user = { name: email.split('@')[0], email }
+  const user = { name: email.split('@')[0], email, role: isAdmin ? 'admin' : 'student' }
   localStorage.setItem(SESSION_KEY, JSON.stringify(user))
   return user
 }
 
-export async function signUp({ name, email, password }) {
+export async function signUp({ name, email, password, isAdmin = false }) {
   await delay()
 
   if (!name || !email || !password) {
@@ -49,7 +55,7 @@ export async function signUp({ name, email, password }) {
     throw new Error('Password must be at least 6 characters.')
   }
 
-  const user = { name, email }
+  const user = { name, email, role: isAdmin ? 'admin' : 'student' }
   localStorage.setItem(SESSION_KEY, JSON.stringify(user))
   return user
 }

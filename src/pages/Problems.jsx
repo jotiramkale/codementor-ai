@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import Panel from '../components/ui/Panel.jsx'
 import FilterChip from '../components/ui/FilterChip.jsx'
 import ProblemCard from '../components/ProblemCard.jsx'
-import { MOCK_PROBLEMS, TOPICS, DIFFICULTIES } from '../data/problemsMockData.js'
+import { TOPICS, DIFFICULTIES } from '../data/problemsMockData.js'
+import { getProblems } from '../data/problemStore.js'
 
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All' },
@@ -12,7 +13,10 @@ const STATUS_OPTIONS = [
 
 // All filtering happens client-side against the mock array — the real
 // version queries the backend with these same filters (Phase 19+/20).
+// Phase 18: reads from problemStore.js (not the static array directly)
+// so an admin's create/edit/delete is reflected here.
 function Problems() {
+  const allProblems = getProblems()
   const [activeDifficulties, setActiveDifficulties] = useState(new Set())
   const [topic, setTopic] = useState('all')
   const [status, setStatus] = useState('all')
@@ -31,7 +35,7 @@ function Problems() {
   }
 
   const filteredProblems = useMemo(() => {
-    return MOCK_PROBLEMS.filter((problem) => {
+    return allProblems.filter((problem) => {
       if (activeDifficulties.size > 0 && !activeDifficulties.has(problem.difficulty)) return false
       if (topic !== 'all' && problem.topic !== topic) return false
       if (status === 'solved' && !problem.solved) return false
@@ -39,14 +43,14 @@ function Problems() {
       if (aiRecommendedOnly && !problem.aiRecommended) return false
       return true
     })
-  }, [activeDifficulties, topic, status, aiRecommendedOnly])
+  }, [allProblems, activeDifficulties, topic, status, aiRecommendedOnly])
 
   return (
     <div>
       <header className="mb-6">
         <h1 className="text-2xl font-semibold text-zinc-50">Problems</h1>
         <p className="mt-1 text-sm text-zinc-400">
-          A demo catalog of {MOCK_PROBLEMS.length} problems — a real, backend-powered set arrives in Phase
+          A demo catalog of {allProblems.length} problems — a real, backend-powered set arrives in Phase
           19+/20.
         </p>
       </header>

@@ -3,11 +3,20 @@
 AI-powered DSA learning, code review, debugging and mentoring platform.
 Final-year B.Tech CSE project, built in phases.
 
-**Current status: Phase 17 complete** — a timed mock Interview Mode
-with an AI interviewer, a controlled single hint, and a performance
-summary — built almost entirely from real pieces earlier phases already
-created. See `legacy/README.md` for how the original prototype maps
-onto this structure.
+**Current status: Phase 20 complete** — the backend in `backend/` now
+has real Alembic migrations, a seed script loading the exact same 29
+problems the frontend uses (verified field-for-field, not eyeballed),
+and a human-readable API contracts reference. See `backend/README.md`
+for what's real vs. stubbed there, and `legacy/README.md` for how the
+original prototype maps onto the frontend structure below.
+
+## Backend
+
+A separate FastAPI project lives in `backend/` — its own `README.md`,
+`requirements.txt`, and status notes. The frontend you're reading about
+below hasn't changed its own behavior in Phase 19; it still runs
+entirely on its own mocks (`USE_MOCK` flags throughout `src/services/`)
+until later phases actually connect the two.
 
 ## Folder structure
 
@@ -15,23 +24,30 @@ onto this structure.
 src/
   components/   Sidebar, TopBar, MobileDrawer, NavItem, SearchBar,
                 NotificationsMenu, ProfileMenu, ProtectedRoute,
-                ProblemCard, and components/ui/ (Button, Avatar, Badge,
-                IconButton, EmptyState, Panel, StatCard, FilterChip)
+                AdminRoute (Phase 18), ProblemCard, and components/ui/
+                (Button, Avatar, Badge, IconButton, EmptyState, Panel,
+                StatCard, FilterChip, ReviewSection)
   pages/        Dashboard (Phase 4), Problems + ProblemDetail (Phase
-                5-11, real), AiMentor (Phase 12/13/15, real), Profile
+                5-11/18, real), AiMentor (Phase 12/13/15, real), Profile
                 (Phase 14, real), Progress (Phase 16, real), Interview
-                (Phase 17, real), Practice (Phase 1, real) and
-                pages/auth/ (SignIn, SignUp, ForgotPassword, ResetPassword)
-                — all 7 main nav destinations are real pages now
+                (Phase 17, real), Admin (Phase 18, admin-only), Practice
+                (Phase 1, real) and pages/auth/ (SignIn, SignUp,
+                ForgotPassword, ResetPassword) — all 7 main nav
+                destinations plus the admin-only page are real now
   layouts/      AppShell.jsx (signed-in shell) and AuthLayout.jsx
                 (centered layout for the auth pages)
   hooks/        custom React hooks (empty — later phases)
-  services/     all API/data access lives here, nowhere else
+  services/     all API/data access lives here, nowhere else —
+                includes agentService.js (Phase 15) and
+                interviewService.js (Phase 17)
   utils/        difficulty.js, time.js, communityStats.js, testStatus.js
                 (shared pass/fail check used by AI Review + AI Debugger)
-  data/         navigation.js, dashboardMockData.js, problemsMockData.js,
-                languages.js (shared editor language list)
-  context/      AuthContext.jsx — mock auth state via useAuth()
+  data/         navigation.js, dashboardMockData.js, problemsMockData.js
+                (static seed data), problemStore.js (Phase 18 — the
+                actual mutable catalog everything reads from now),
+                languages.js, progressMockData.js
+  context/      AuthContext.jsx — mock auth state via useAuth(), now
+                including a role ('student' | 'admin', Phase 18)
   features/     larger self-contained feature modules (empty — later phases)
   assets/       icons/images/fonts (empty)
 legacy/
@@ -51,8 +67,11 @@ npm run dev
 Then open the URL Vite prints (usually `http://localhost:5173`). You'll
 land on **Sign in** first now — use "Sign up" (any name/email + a 6+
 character password) or "Sign in" the same way; there's no real backend,
-so any well-formed input works. Once in, use the sidebar (or the ☰ menu
-on a narrow window) to reach Practice, which has the real form.
+so any well-formed input works. Check the **"Sign up/in as admin
+(demo)"** checkbox to test the Admin page — leave it unchecked to test
+as a regular student and confirm the Admin nav item and `/admin` route
+are actually inaccessible. Once in, use the sidebar (or the ☰ menu on a
+narrow window) to reach Practice, which has the real form.
 
 To produce a production build:
 
@@ -85,6 +104,57 @@ Frontend-only mock — no backend or JWT exists yet:
   them signed out redirects to Sign in and returns you to where you were
   headed after signing in.
 - Log out (in the profile menu) actually clears the mock session now.
+
+## Admin (Phase 18)
+
+Two real, separate guards enforce "clearly separate admin and student
+permissions": `AdminRoute.jsx` redirects a signed-in non-admin straight
+to Dashboard if they visit `/admin` directly (not just a hidden nav
+link — the URL itself is protected), and the Admin nav item only
+renders for `user.role === 'admin'` in both the sidebar and mobile
+drawer. Since there's no real backend to check actual roles against,
+role is an explicit checkbox on sign-in/sign-up ("Sign in as admin
+(demo)") — visible and honest about being a demo mechanism, not a
+hidden trick like a magic email string.
+
+**The bigger structural change this phase needed**: admin actions have
+to actually do something, not fill out a form that goes nowhere. So two
+data sources that were static consts since Phase 5/13 became genuinely
+mutable stores:
+- `problemStore.js` (new) wraps the problem catalog with real
+  `createProblem`/`updateProblem`/`deleteProblem` — Problems,
+  ProblemDetail, and Interview Mode all now read through it, so an
+  admin's changes actually show up there.
+- `ragService.js`'s knowledge base went from `const` to `let` with
+  matching CRUD exports — an admin-added entry is immediately usable by
+  the AI Mentor's real retrieval (Phase 13), in the same session.
+
+I verified both of these are genuinely wired, not just structurally
+present: added a knowledge entry, confirmed a query that previously
+retrieved nothing now retrieves it, deleted it, confirmed retrieval
+goes back to nothing — all by actually calling the functions, not by
+reading the code and assuming it's connected.
+
+**Test cases** (create/hide/unhide) are real *data* on a problem now,
+editable in the admin form with a per-case hidden toggle — but honestly
+labeled as architecture only, since the mock execution engine
+(`submissionService.js`) still simulates pass/fail rather than running
+against real test data. Wiring them together is Phase 21's job (real
+execution), not this one's.
+
+**Generate + review, not generate + auto-publish**: `generateProblemDraft()`
+deliberately produces a rough draft with placeholder example/constraint/
+hint text (`TODO`s throughout) rather than something that looks
+finished — opening straight into the edit form after generating is the
+"review generated problems" step, not a rubber stamp. Verified the
+draft actually respects a requested topic/difficulty and falls back
+sensibly when none is given.
+
+**Difficulty and topics** stay the fixed taxonomies the rest of the app
+already uses (3 difficulties, 14 topics) — the admin form assigns them
+to problems via the same dropdowns rather than allowing arbitrary new
+values that would ripple inconsistency into Dashboard/Progress's
+topic-based charts elsewhere.
 
 ## Interview Mode (Phase 17)
 
@@ -459,34 +529,38 @@ disabled rather than silently doing nothing.
 
 ## What's real vs. mock vs. planned right now
 
-- **Real**: the shell, auth flow and route protection; all 7 main nav
-  pages (Dashboard, Problems/ProblemDetail, AiMentor, Interview,
-  Progress, Profile, Practice); the Monaco editor; the Run/Submit UX;
-  the solving timer and submission history; the AI Review, AI Hints, AI
-  Debugger, AI Mentor, RAG retrieval, User Memory, multi-agent
-  orchestrator, and Interview Mode's *behavior* (grounding in real
-  execution results where applicable, graduated disclosure, real
-  multi-turn conversation history, real keyword-based retrieval feeding
-  real replies, memory genuinely scoped per user, real agent routing
-  with an honest response for agents not yet built, a real timer and a
-  real controlled-hint limit) genuinely works as designed; the Profile
+- **Real**: the shell, auth flow (including role) and route protection;
+  all 7 main nav pages plus the admin-only Admin page; the Monaco
+  editor; the Run/Submit UX; the solving timer and submission history;
+  the AI Review, AI Hints, AI Debugger, AI Mentor, RAG retrieval, User
+  Memory, multi-agent orchestrator, Interview Mode, and Admin's
+  *behavior* (grounding in real execution results where applicable,
+  graduated disclosure, real multi-turn conversation history, real
+  keyword-based retrieval feeding real replies, memory genuinely scoped
+  per user, real agent routing with an honest response for agents not
+  yet built, a real timer and controlled-hint limit, real role-based
+  route/nav protection, and genuine CRUD over the problem catalog and
+  RAG knowledge base — admin changes actually affect what students see
+  in the same session) all genuinely work as designed; the Profile
   page's account panel shows your real (mock) signed-in identity.
-- **Mock**: authentication, every Dashboard/Progress number, the entire
-  problem catalog, Run/Submit's execution results (also what scores an
-  interview), community time-comparison stats, and the content each AI
-  feature ultimately produces (reviews, hints, debug explanations,
-  mentor replies, the RAG knowledge base, AI Memory observations, and
-  interview feedback) — none of this reflects a real backend, database,
-  code execution, or LLM call. All fabricated until Phase 19-24 build
-  the real versions.
-- **Planned, visibly labeled as such**: the Interview/Problem
-  Generator/Analytics *agents* specifically (visible in the AI Team
-  panel, honest when selected that they're not built), and voice input
-  in Interview Mode (architecture only, per the spec's explicit
-  instruction not to build it yet).
+- **Mock**: authentication's underlying identity check, every Dashboard/
+  Progress number, the content of problems and knowledge entries
+  (whether seeded or admin-created), Run/Submit's execution results
+  (also what scores an interview), community time-comparison stats, and
+  the content each AI feature ultimately produces (reviews, hints,
+  debug explanations, mentor replies, generated problem drafts, AI
+  Memory observations, and interview feedback) — none of this reflects
+  a real backend, database, code execution, or LLM call. All fabricated
+  until Phase 19-24 build the real versions.
+- **Planned, visibly labeled as such**: the Interview/Problem Generator/
+  Analytics *agents* (in the AI Team panel, honest when selected that
+  they're not built), voice input in Interview Mode, and test cases as
+  data that actually feeds execution (they're real, editable data now,
+  but the mock execution engine doesn't consume them yet — Phase 21).
 - **Not implemented**: global search (visually present, disabled),
   notifications (a genuine empty state), a full-solution reveal, real
   embeddings/ChromaDB (Phase 23), voice interviews, and persistence of
-  anything beyond the current page visit (including AI Memory and
-  Progress's numbers — both recomputed fresh each time, not actually
-  stored) — that needs the real backend (Phase 19+/20/24).
+  anything beyond the current browser session (including admin's
+  problem/knowledge edits, AI Memory, and Progress's numbers — all
+  reset on a full reload, nothing is actually saved to a database) —
+  that needs the real backend (Phase 19+/20/24).

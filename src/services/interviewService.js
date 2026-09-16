@@ -23,7 +23,7 @@
  * functionality now.
  */
 
-import { MOCK_PROBLEMS } from '../data/problemsMockData.js'
+import { getProblems } from '../data/problemStore.js'
 import { submitSolution } from './submissionService.js'
 import { getHint } from './aiService.js'
 import { isPassingStatus } from '../utils/testStatus.js'
@@ -36,20 +36,17 @@ export const INTERVIEW_TIME_LIMITS_SECONDS = {
 
 export const MAX_HINTS_PER_INTERVIEW = 1
 
-// Interview Mode only draws from problems with a full statement written
-// (Phase 6) — presenting an interview question with no real description
-// would be a worse experience than a smaller, honest question pool.
-const INTERVIEWABLE_PROBLEMS = MOCK_PROBLEMS.filter((p) => Boolean(p.description))
-
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 export function pickInterviewProblem({ difficulty, topic } = {}) {
-  let pool = INTERVIEWABLE_PROBLEMS
+  // Computed fresh on every call (not cached at module load) so an
+  // admin-added problem with a full description can show up here too.
+  let pool = getProblems().filter((p) => Boolean(p.description))
   if (difficulty) pool = pool.filter((p) => p.difficulty === difficulty)
   if (topic) pool = pool.filter((p) => p.topic === topic)
-  if (pool.length === 0) pool = INTERVIEWABLE_PROBLEMS // fall back rather than returning nothing
+  if (pool.length === 0) pool = getProblems().filter((p) => Boolean(p.description)) // fall back rather than returning nothing
   return pool[Math.floor(Math.random() * pool.length)]
 }
 

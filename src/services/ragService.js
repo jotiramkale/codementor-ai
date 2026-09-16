@@ -26,7 +26,12 @@
  *   return { chunks: results.map(toChunkShape) }
  */
 
-const KNOWLEDGE_BASE = [
+// Phase 18: mutable (was a const) so the admin "manage RAG knowledge"
+// screen can genuinely add/edit/delete entries that retrieveContext()
+// below actually uses in the same session — not a disconnected admin
+// form. See listKnowledgeEntries()/addKnowledgeEntry()/etc. near the
+// bottom of this file.
+let KNOWLEDGE_BASE = [
   {
     id: 'kb-1',
     domain: 'DSA concepts',
@@ -195,4 +200,41 @@ export async function retrieveContext(query, { maxResults = 2 } = {}) {
       relevance: Math.min(1, relevance),
     })),
   }
+}
+
+/**
+ * Phase 18: admin CRUD over the knowledge base. Every entry created or
+ * edited here keeps the same honesty rule from the top of this file —
+ * the admin UI hardcodes the source to the same demo label rather than
+ * letting an arbitrary citation be typed in, so this can't become a
+ * back door for the fake-citation problem this file was built to avoid.
+ */
+
+export function listKnowledgeEntries() {
+  return KNOWLEDGE_BASE
+}
+
+let nextKnowledgeId = KNOWLEDGE_BASE.length + 1
+
+export function addKnowledgeEntry({ domain, title, content, keywords }) {
+  const entry = {
+    id: `kb-admin-${nextKnowledgeId}`,
+    domain,
+    title,
+    content,
+    keywords,
+    source: 'CodeMentor AI knowledge base (demo entry)',
+  }
+  nextKnowledgeId += 1
+  KNOWLEDGE_BASE = [...KNOWLEDGE_BASE, entry]
+  return entry
+}
+
+export function updateKnowledgeEntry(id, updates) {
+  KNOWLEDGE_BASE = KNOWLEDGE_BASE.map((entry) => (entry.id === id ? { ...entry, ...updates, source: entry.source } : entry))
+  return KNOWLEDGE_BASE.find((entry) => entry.id === id)
+}
+
+export function deleteKnowledgeEntry(id) {
+  KNOWLEDGE_BASE = KNOWLEDGE_BASE.filter((entry) => entry.id !== id)
 }

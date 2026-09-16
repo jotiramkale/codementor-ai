@@ -9,7 +9,8 @@ import CodeEditor from '../components/CodeEditor.jsx'
 import { toneForDifficulty } from '../utils/difficulty.js'
 import { formatDuration, formatShortDateTime } from '../utils/time.js'
 import { communityStatsForProblem, estimatePercentile } from '../utils/communityStats.js'
-import { MOCK_PROBLEMS, DEFAULT_STARTER_CODE } from '../data/problemsMockData.js'
+import { DEFAULT_STARTER_CODE } from '../data/problemsMockData.js'
+import { getProblemById } from '../data/problemStore.js'
 import { labelForLanguage } from '../data/languages.js'
 import { runSample, submitSolution } from '../services/submissionService.js'
 import { reviewSubmission, getHint, debugError } from '../services/aiService.js'
@@ -23,7 +24,7 @@ import { isPassingStatus } from '../utils/testStatus.js'
 // a real Run/Submit result says so.
 function ProblemDetail() {
   const { id } = useParams()
-  const problem = MOCK_PROBLEMS.find((p) => String(p.id) === id)
+  const problem = getProblemById(id)
 
   const starterCode = problem?.starterCode || DEFAULT_STARTER_CODE
   const [language, setLanguage] = useState('python')

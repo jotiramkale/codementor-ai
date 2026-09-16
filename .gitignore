@@ -3,3 +3,8 @@ dist
 .env
 *.log
 .DS_Store
+.env
+.env.*
+.env.example
+__pycache__/
+*.pyc

@@ -11,6 +11,7 @@ function SignUp() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [isAdmin, setIsAdmin] = useState(false)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
@@ -19,7 +20,7 @@ function SignUp() {
     setError('')
     setIsLoading(true)
     try {
-      await signUp({ name, email, password })
+      await signUp({ name, email, password, isAdmin })
       navigate('/dashboard', { replace: true })
     } catch (err) {
       setError(err.message)
@@ -79,6 +80,16 @@ function SignUp() {
             className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-indigo-400"
           />
         </div>
+
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-400">
+          <input
+            type="checkbox"
+            checked={isAdmin}
+            onChange={(e) => setIsAdmin(e.target.checked)}
+            className="h-4 w-4 rounded border-zinc-700 bg-zinc-900 text-indigo-400 focus:ring-indigo-400"
+          />
+          Create as admin (demo — no real backend checks this)
+        </label>
 
         <Button type="submit" disabled={isLoading} className="w-full">
           {isLoading ? 'Creating account…' : 'Create account'}

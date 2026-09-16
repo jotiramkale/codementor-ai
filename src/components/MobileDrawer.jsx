@@ -1,11 +1,15 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { FiX } from 'react-icons/fi'
+import { useAuth } from '../context/AuthContext.jsx'
 import { NAV_ITEMS } from '../data/navigation.js'
 import NavItem from './NavItem.jsx'
 
 // The one deliberate motion moment on mobile: a slide-in drawer with a
 // dimmed overlay. No per-item hover animations elsewhere in the shell.
 function MobileDrawer({ isOpen, onClose }) {
+  const { user } = useAuth()
+  const visibleItems = NAV_ITEMS.filter((item) => !item.requiresAdmin || user?.role === 'admin')
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -37,7 +41,7 @@ function MobileDrawer({ isOpen, onClose }) {
             </div>
 
             <nav className="flex flex-1 flex-col gap-1">
-              {NAV_ITEMS.map((item) => (
+              {visibleItems.map((item) => (
                 <NavItem key={item.path} item={item} onNavigate={onClose} />
               ))}
             </nav>

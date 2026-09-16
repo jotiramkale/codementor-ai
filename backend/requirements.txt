@@ -1,0 +1,49 @@
+# CodeMentor AI backend — Phase 19 dependencies.
+#
+# Version floors below were checked against current package status as
+# of September 2026 rather than guessed — FastAPI/Pydantic/SQLAlchemy
+# all move fast enough that a stale pin can be wrong within months.
+# Exact patch versions are intentionally left open (>=) so pip resolves
+# to whatever is current and compatible; once your environment is
+# working, run `pip freeze > requirements-lock.txt` to pin exact
+# versions for reproducibility.
+#
+# This sandbox has no internet access, so none of this has been
+# installed or run here — see backend/README.md.
+
+# --- Web framework ---
+fastapi>=0.115
+uvicorn[standard]>=0.30
+
+# --- Data validation / settings (Pydantic v2 — the current standard;
+# v1 syntax like `class Config` will NOT work with this) ---
+pydantic>=2.9
+pydantic-settings>=2.5
+
+# --- Database (Phase 20+) — SQLAlchemy 2.0 style (Mapped/mapped_column,
+# not the legacy 1.x Column-only style) ---
+sqlalchemy>=2.0
+psycopg2-binary>=2.9
+alembic>=1.13
+
+# --- Auth — real password hashing and JWT, used starting Phase 19's
+# app/auth/security.py even before a real database exists ---
+python-jose[cryptography]>=3.3
+passlib[argon2]>=1.7
+
+# --- Environment / config loading ---
+python-dotenv>=1.0
+
+# --- Required by FastAPI for OAuth2 form-based login / multipart forms ---
+python-multipart>=0.0.9
+
+# --- AI (Phase 22) ---
+groq>=0.11
+
+# --- RAG (Phase 23) ---
+chromadb>=0.5
+sentence-transformers>=3.0
+
+# --- Testing (spec asks for Pytest) ---
+pytest>=8.3
+httpx>=0.27

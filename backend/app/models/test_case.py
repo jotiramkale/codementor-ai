@@ -4,8 +4,8 @@ app/models/test_case.py
 Matches the original spec's `test_cases` table exactly. This is the
 real backing store for what Phase 18's admin UI called "test cases" on
 the frontend (create + hide/unhide) — the frontend built that editing
-UI and data shape before this table existed; this is where the data
-actually lives once Phase 21 wires real execution up to it.
+UI and data shape before this table existed; the real Docker judge now
+loads these rows for public Run and full Submit execution.
 """
 
 from sqlalchemy import ForeignKey, Text

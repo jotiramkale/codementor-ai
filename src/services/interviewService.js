@@ -23,7 +23,7 @@
  * functionality now.
  */
 
-import { getProblems } from '../data/problemStore.js'
+import { listProblems } from './problemService.js'
 import { submitSolution } from './submissionService.js'
 import { getHint } from './aiService.js'
 import { isPassingStatus } from '../utils/testStatus.js'
@@ -40,13 +40,11 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-export function pickInterviewProblem({ difficulty, topic } = {}) {
-  // Computed fresh on every call (not cached at module load) so an
-  // admin-added problem with a full description can show up here too.
-  let pool = getProblems().filter((p) => Boolean(p.description))
+export async function pickInterviewProblem({ difficulty, topic } = {}) {
+  let pool = (await listProblems()).filter((p) => Boolean(p.description))
   if (difficulty) pool = pool.filter((p) => p.difficulty === difficulty)
   if (topic) pool = pool.filter((p) => p.topic === topic)
-  if (pool.length === 0) pool = getProblems().filter((p) => Boolean(p.description)) // fall back rather than returning nothing
+  if (pool.length === 0) throw new Error('No backend problems match those interview filters.')
   return pool[Math.floor(Math.random() * pool.length)]
 }
 
@@ -102,8 +100,11 @@ export async function getControlledHint(problem) {
  * interview feedback. Never claims the code passed unless the mock
  * execution result actually says so — same rule as Phase 10/11.
  */
-export async function finishInterview({ problem, code, starterCode, timeTakenSeconds, timeLimitSeconds, hintsUsed }) {
-  const executionResult = await submitSolution({ code, starterCode, difficulty: problem.difficulty })
+export async function finishInterview({ problem, code, language, timeTakenSeconds, timeLimitSeconds, hintsUsed }) {
+  const executionResult = await submitSolution({
+    problemId: problem.id, code, language,
+    solvingTime: timeTakenSeconds,
+  })
   await delay(900)
 
   const withinTime = timeTakenSeconds <= timeLimitSeconds

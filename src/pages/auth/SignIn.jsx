@@ -12,7 +12,6 @@ function SignIn() {
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [isAdmin, setIsAdmin] = useState(false)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
@@ -21,7 +20,7 @@ function SignIn() {
     setError('')
     setIsLoading(true)
     try {
-      await signIn({ email, password, isAdmin })
+      await signIn({ email, password })
       navigate(redirectTo, { replace: true })
     } catch (err) {
       setError(err.message)
@@ -33,7 +32,7 @@ function SignIn() {
   return (
     <AuthLayout
       title="Sign in to CodeMentor AI"
-      subtitle="Mock auth for now — any email + a 6+ character password works."
+      subtitle="Sign in with your CodeMentor account. Your role is verified by the server."
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {error && (
@@ -74,16 +73,6 @@ function SignIn() {
             className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-indigo-400"
           />
         </div>
-
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-400">
-          <input
-            type="checkbox"
-            checked={isAdmin}
-            onChange={(e) => setIsAdmin(e.target.checked)}
-            className="h-4 w-4 rounded border-zinc-700 bg-zinc-900 text-indigo-400 focus:ring-indigo-400"
-          />
-          Sign in as admin (demo — no real backend checks this)
-        </label>
 
         <Button type="submit" disabled={isLoading} className="w-full">
           {isLoading ? 'Signing in…' : 'Sign in'}

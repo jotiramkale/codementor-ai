@@ -7,7 +7,7 @@ for the mock data the frontend already filters and renders against
 (Phase 5-9, 18).
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ExampleSchema(BaseModel):
@@ -26,8 +26,8 @@ class TestCaseOut(BaseModel):
 
 
 class TestCaseCreate(BaseModel):
-    input: str
-    expected_output: str
+    input: str = Field(max_length=32768)
+    expected_output: str = Field(max_length=32768)
     hidden: bool = True
 
 
@@ -66,7 +66,7 @@ class ProblemCreate(BaseModel):
     constraints: list[str] = []
     hints: list[str] = []
     starter_code: dict[str, str] = {}
-    test_cases: list[TestCaseCreate] = []
+    test_cases: list[TestCaseCreate] = Field(default_factory=list, max_length=50)
 
 
 class ProblemUpdate(ProblemCreate):

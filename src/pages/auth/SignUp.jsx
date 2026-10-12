@@ -29,7 +29,7 @@ function SignUp() {
   }
 
   return (
-    <AuthLayout title="Create your account" subtitle="Mock auth for now — nothing is sent to a real server yet.">
+    <AuthLayout title="Create your account" subtitle="Create a student account. Administrator access is granted separately by the server.">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {error && (
           <div className="rounded-lg border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-300">

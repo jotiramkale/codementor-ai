@@ -32,7 +32,7 @@ function SignIn() {
   return (
     <AuthLayout
       title="Sign in to CodeMentor AI"
-      subtitle="Mock auth for now — any email + a 6+ character password works."
+      subtitle="Sign in with your CodeMentor account. Your role is verified by the server."
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {error && (

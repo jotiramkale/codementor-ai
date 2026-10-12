@@ -12,14 +12,7 @@ const SUGGESTED_PROMPTS = [
   'Compare BFS and DFS',
 ]
 
-// Phase 12: a conversational AI Mentor. Fully mocked (see aiService.js)
-// but built with real conversation-history architecture — the full
-// message list is sent on every turn, which is what a real multi-turn
-// Groq call (Phase 22) will need.
-// Phase 15: every message is now routed through the multi-agent
-// orchestrator (agentService.js) instead of calling the mentor reply
-// directly — each reply shows which agent handled it and what the
-// critic step did, both real values from the orchestrator's trace.
+// Conversation history is sent to the authenticated Groq-backed API.
 function AiMentor() {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
@@ -52,6 +45,13 @@ function AiMentor() {
           ...result.reply,
         },
       ])
+    } catch (error) {
+      setMessages((prev) => [...prev, {
+        id: Date.now() + 1,
+        role: 'assistant',
+        isMock: false,
+        content: `I couldn't complete that request. ${error.message}`,
+      }])
     } finally {
       setIsSending(false)
     }
@@ -134,6 +134,12 @@ function AiMentor() {
                     </div>
                   )}
 
+                  {message.userMemoryUsed?.length > 0 && (
+                    <p className="mt-2 border-t border-zinc-800 pt-2 text-xs text-zinc-500">
+                      Personalized with {message.userMemoryUsed.length} private learning note{message.userMemoryUsed.length === 1 ? '' : 's'}.
+                    </p>
+                  )}
+
                   {message.trace && (
                     <p className="mt-2 border-t border-zinc-800 pt-2 text-xs text-zinc-600">
                       Critic: {message.trace.critiqueNote}
@@ -166,25 +172,23 @@ function AiMentor() {
         sessions arrives with Phase 14.
       </p>
 
-      <Panel title="AI Team" className="mt-4" action={<Badge tone="ai">AI</Badge>}>
+      <Panel title="Multi-agent architecture (planned)" className="mt-4" action={<Badge tone="neutral">Planned</Badge>}>
         <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
           <Badge tone="neutral">Your request</Badge>
           <span className="text-zinc-700">→</span>
-          <Badge tone="neutral">Orchestrator</Badge>
+          <Badge tone="neutral">Future orchestrator</Badge>
           <span className="text-zinc-700">→</span>
           <Badge tone="neutral">Select agent</Badge>
           <span className="text-zinc-700">→</span>
-          <Badge tone="ai">Agent reasoning (Groq, Phase 22)</Badge>
+          <Badge tone="neutral">Specialized agents</Badge>
           <span className="text-zinc-700">→</span>
           <Badge tone="neutral">Critic/reflection</Badge>
           <span className="text-zinc-700">→</span>
           <Badge tone="neutral">Final response</Badge>
         </div>
         <p className="mb-4 text-sm text-zinc-400">
-          Every message above is routed by a real orchestrator (not a scripted demo) to one of the
-          agents below — see "Handled by" under each reply. Agents marked Planned exist in this
-          architecture but have no working logic yet; asking them something says so honestly instead of
-          faking an answer.
+          This architecture is not active yet. The chat above uses one real mentor endpoint; these specialized
+          agents and the reflection step remain planned and are not presented as running.
         </p>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -201,14 +205,6 @@ function AiMentor() {
           ))}
         </div>
 
-        <div className="mt-3 rounded-lg border border-dashed border-zinc-800 p-3">
-          <p className="text-xs text-zinc-500">
-            <span className="text-zinc-300">Reflection/Critic Agent</span> — runs internally on every
-            reply rather than being selected directly. It's a real, if simple, check: it re-verifies any
-            claim about test results against the actual last result, using the same rule the AI Review
-            and AI Debugger enforce (Phase 10/11), and corrects the response if the two ever disagree.
-          </p>
-        </div>
       </Panel>
 
       <Panel title="How the AI Mentor retrieves knowledge" className="mt-4">
@@ -221,18 +217,11 @@ function AiMentor() {
           <span className="text-zinc-700">→</span>
           <Badge tone="neutral">Prompt</Badge>
           <span className="text-zinc-700">→</span>
-          <Badge tone="ai">LLM (Phase 22)</Badge>
+          <Badge tone="neutral">Groq + private memory</Badge>
           <span className="text-zinc-700">→</span>
           <Badge tone="neutral">Answer</Badge>
         </div>
-        <p className="mt-3 text-sm text-zinc-400">
-          Today, "Retriever" and "Relevant knowledge" run against a small, self-written demo knowledge
-          base — 10 entries across 8 domains (DSA concepts, algorithms, complexity, patterns, common
-          mistakes, hints, interview patterns, learning roadmaps) — using simple keyword matching, not
-          real embeddings or vector search. Every source is honestly labeled as this app's own demo
-          notes, never attributed to an outside book or site it didn't actually come from. Phase 23
-          replaces the keyword matching with real embeddings and ChromaDB.
-        </p>
+        <p className="mt-3 text-sm text-zinc-400">The chat sends your conversation to the authenticated backend. ChromaDB retrieves shared knowledge and only your own relevant memory before Groq generates a reply. Multi-agent routing and critic review remain planned; the backend currently returns a single mentor response.</p>
       </Panel>
     </div>
   )

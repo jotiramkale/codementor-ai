@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
+import AdminRoute from './components/AdminRoute.jsx'
 import AppShell from './layouts/AppShell.jsx'
 import SignIn from './pages/auth/SignIn.jsx'
 import SignUp from './pages/auth/SignUp.jsx'
@@ -14,6 +15,7 @@ import AiMentor from './pages/AiMentor.jsx'
 import Interview from './pages/Interview.jsx'
 import ProgressPage from './pages/Progress.jsx'
 import Profile from './pages/Profile.jsx'
+import Admin from './pages/Admin.jsx'
 
 function App() {
   return (
@@ -43,6 +45,14 @@ function App() {
             <Route path="/interview" element={<Interview />} />
             <Route path="/progress" element={<ProgressPage />} />
             <Route path="/profile" element={<Profile />} />
+            <Route
+              path="/admin"
+              element={
+                <AdminRoute>
+                  <Admin />
+                </AdminRoute>
+              }
+            />
           </Route>
         </Routes>
       </BrowserRouter>

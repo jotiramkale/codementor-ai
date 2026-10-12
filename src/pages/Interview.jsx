@@ -46,6 +46,7 @@ function Interview() {
 
   const [isFinishing, setIsFinishing] = useState(false)
   const [summary, setSummary] = useState(null)
+  const [actionError, setActionError] = useState('')
 
   useEffect(() => {
     if (phase !== 'session') return undefined
@@ -60,21 +61,24 @@ function Interview() {
   const isTimeUp = phase === 'session' && remainingSeconds === 0
 
   async function handleStart() {
-    const selected = pickInterviewProblem({ difficulty: difficulty || undefined, topic: topic || undefined })
-    const limit = INTERVIEW_TIME_LIMITS_SECONDS[selected.difficulty]
+    setActionError('')
+    try {
+      const selected = await pickInterviewProblem({ difficulty: difficulty || undefined, topic: topic || undefined })
+      const limit = INTERVIEW_TIME_LIMITS_SECONDS[selected.difficulty]
 
-    setProblem(selected)
-    setTimeLimitSeconds(limit)
-    setCodeByLanguage({ ...(selected.starterCode || DEFAULT_STARTER_CODE) })
-    setHintsUsed(0)
-    setConversation([])
-    setSummary(null)
-    setStartedAt(Date.now())
-    setNow(Date.now())
-    setPhase('session')
+      setProblem(selected)
+      setTimeLimitSeconds(limit)
+      setCodeByLanguage({ ...(selected.starterCode || DEFAULT_STARTER_CODE) })
+      setHintsUsed(0)
+      setConversation([])
+      setSummary(null)
+      setStartedAt(Date.now())
+      setNow(Date.now())
+      setPhase('session')
 
-    const opening = await getInterviewerOpening(selected)
-    setConversation([{ id: Date.now(), role: 'interviewer', content: opening }])
+      const opening = await getInterviewerOpening(selected)
+      setConversation([{ id: Date.now(), role: 'interviewer', content: opening }])
+    } catch (error) { setActionError(error.message) }
   }
 
   async function handleSendApproach() {
@@ -113,13 +117,15 @@ function Interview() {
       const result = await finishInterview({
         problem,
         code: currentCode,
-        starterCode: starterCode[language],
+        language,
         timeTakenSeconds: elapsedSeconds,
         timeLimitSeconds,
         hintsUsed,
       })
       setSummary(result)
       setPhase('summary')
+    } catch (error) {
+      setActionError(error.message)
     } finally {
       setIsFinishing(false)
     }
@@ -137,6 +143,8 @@ function Interview() {
         <h1 className="text-2xl font-semibold text-zinc-50">Interview Mode</h1>
         <p className="mt-1 text-sm text-zinc-400">A timed mock interview with an AI interviewer.</p>
       </header>
+
+      {actionError && <p role="alert" className="mb-3 rounded-lg border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-300">{actionError}</p>}
 
       {phase === 'setup' && (
         <Panel title="Set up your interview">

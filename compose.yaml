@@ -1,0 +1,86 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: codementor
+      POSTGRES_USER: codementor
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the deployment environment}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U codementor -d codementor"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+    networks: [app]
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+psycopg2://codementor:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/codementor
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set a unique JWT_SECRET_KEY of at least 32 characters}
+      GROQ_MODEL: ${GROQ_MODEL:-openai/gpt-oss-120b}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080}
+      CHROMA_PERSIST_DIR: /data/chroma
+      HF_HOME: /data/model-cache
+      XDG_CACHE_HOME: /data/model-cache
+      TORCH_HOME: /data/model-cache/torch
+      EXECUTION_ENABLED: "false"
+    volumes:
+      - app_data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 120s
+      retries: 3
+    ports:
+      - "${API_PORT:-8000}:8000"
+    networks: [app]
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend.Dockerfile
+      args:
+        VITE_API_BASE_URL: ""
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [app]
+
+volumes:
+  postgres_data:
+  app_data:
+
+networks:
+  app:

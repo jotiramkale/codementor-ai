@@ -1,9 +1,11 @@
-import { FiAward, FiCode, FiCpu, FiGrid, FiTerminal, FiTrendingUp, FiUser } from 'react-icons/fi'
+import { FiAward, FiCode, FiCpu, FiGrid, FiShield, FiTerminal, FiTrendingUp, FiUser } from 'react-icons/fi'
 
 // Single source of truth for primary navigation, so the desktop sidebar
 // and mobile drawer can never drift apart. `accent: 'ai'` marks the one
 // item that represents AI-generated content rather than the learner's
 // own work — it gets the indigo accent instead of amber when active.
+// Phase 18: `requiresAdmin: true` marks the one item only shown to
+// admin accounts — Sidebar.jsx and MobileDrawer.jsx both filter on it.
 export const NAV_ITEMS = [
   { label: 'Dashboard', path: '/dashboard', icon: FiGrid },
   { label: 'Problems', path: '/problems', icon: FiCode },
@@ -12,4 +14,5 @@ export const NAV_ITEMS = [
   { label: 'Interview', path: '/interview', icon: FiAward },
   { label: 'Progress', path: '/progress', icon: FiTrendingUp },
   { label: 'Profile', path: '/profile', icon: FiUser },
+  { label: 'Admin', path: '/admin', icon: FiShield, requiresAdmin: true },
 ]

@@ -1,0 +1,11 @@
+# Never send local credentials or generated data to the Docker build daemon.
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+chroma_data/
+.git/

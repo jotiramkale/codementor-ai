@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Panel from '../components/ui/Panel.jsx'
 import FilterChip from '../components/ui/FilterChip.jsx'
 import ProblemCard from '../components/ProblemCard.jsx'
-import { MOCK_PROBLEMS, TOPICS, DIFFICULTIES } from '../data/problemsMockData.js'
+import { TOPICS, DIFFICULTIES } from '../data/problemsMockData.js'
+import { listProblems } from '../services/problemService.js'
 
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All' },
@@ -10,13 +11,18 @@ const STATUS_OPTIONS = [
   { value: 'unsolved', label: 'Unsolved' },
 ]
 
-// All filtering happens client-side against the mock array — the real
-// version queries the backend with these same filters (Phase 19+/20).
 function Problems() {
+  const [allProblems, setAllProblems] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [activeDifficulties, setActiveDifficulties] = useState(new Set())
   const [topic, setTopic] = useState('all')
   const [status, setStatus] = useState('all')
   const [aiRecommendedOnly, setAiRecommendedOnly] = useState(false)
+
+  useEffect(() => {
+    listProblems().then(setAllProblems).catch((error) => setLoadError(error.message)).finally(() => setIsLoading(false))
+  }, [])
 
   function toggleDifficulty(difficulty) {
     setActiveDifficulties((prev) => {
@@ -31,7 +37,7 @@ function Problems() {
   }
 
   const filteredProblems = useMemo(() => {
-    return MOCK_PROBLEMS.filter((problem) => {
+    return allProblems.filter((problem) => {
       if (activeDifficulties.size > 0 && !activeDifficulties.has(problem.difficulty)) return false
       if (topic !== 'all' && problem.topic !== topic) return false
       if (status === 'solved' && !problem.solved) return false
@@ -39,15 +45,14 @@ function Problems() {
       if (aiRecommendedOnly && !problem.aiRecommended) return false
       return true
     })
-  }, [activeDifficulties, topic, status, aiRecommendedOnly])
+  }, [allProblems, activeDifficulties, topic, status, aiRecommendedOnly])
 
   return (
     <div>
       <header className="mb-6">
         <h1 className="text-2xl font-semibold text-zinc-50">Problems</h1>
         <p className="mt-1 text-sm text-zinc-400">
-          A demo catalog of {MOCK_PROBLEMS.length} problems — a real, backend-powered set arrives in Phase
-          19+/20.
+          Browse problems from the backend. Solved state and attempt counts are private to your account.
         </p>
       </header>
 
@@ -117,7 +122,9 @@ function Problems() {
       </Panel>
 
       <div className="flex flex-col gap-3">
-        {filteredProblems.length === 0 ? (
+        {isLoading ? <p className="py-8 text-center text-sm text-zinc-500">Loading problems…</p> : loadError ? (
+          <div role="alert" className="rounded-xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-300">{loadError}</div>
+        ) : filteredProblems.length === 0 ? (
           <div className="rounded-xl border border-dashed border-zinc-800 px-6 py-12 text-center text-sm text-zinc-500">
             No problems match these filters.
           </div>

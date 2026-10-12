@@ -3,11 +3,52 @@
 AI-powered DSA learning, code review, debugging and mentoring platform.
 Final-year B.Tech CSE project, built in phases.
 
-**Current status: Phase 17 complete** — a timed mock Interview Mode
-with an AI interviewer, a controlled single hint, and a performance
-summary — built almost entirely from real pieces earlier phases already
-created. See `legacy/README.md` for how the original prototype maps
-onto this structure.
+**Current status: Phases 25–27 are present** — the frontend uses authenticated
+FastAPI services, the backend includes Groq, Chroma RAG, private memory,
+persisted submissions and progress, and the repository includes security
+handling plus Docker Compose/Nginx deployment files. Dashboard analytics,
+community comparisons, password reset, and parts of Interview Mode remain
+demo or unavailable; see `backend/README.md` and `deploy/README.md`.
+
+## Backend
+
+A separate FastAPI project lives in `backend/`. Set `VITE_API_BASE_URL`
+in the root `.env` to the API origin (defaults to `http://localhost:8000`).
+Never put the Groq key in a Vite variable; it belongs only in
+`backend/.env`. Bearer access tokens are stored in browser local storage
+because the current backend exposes bearer authentication rather than an
+httpOnly cookie flow.
+
+## Local end-to-end setup
+
+1. Install frontend dependencies with `npm install` and copy root
+   `.env.example` to `.env`. Vite uses `VITE_API_BASE_URL=http://localhost:8000`.
+2. In `backend/`, create and activate a Python virtual environment,
+   install `requirements-dev.txt`, copy `.env.example` to `.env`, and set
+   a PostgreSQL `DATABASE_URL`, a strong `JWT_SECRET_KEY`, and a valid
+   `GROQ_API_KEY`. Keep real credentials only in ignored `.env` files.
+3. Apply migrations with `alembic upgrade head`, then seed the local
+   development problems and accounts with `python -m app.db.seed`.
+   The seed script documents its development-only demo credentials.
+4. Start FastAPI from `backend/` with `uvicorn app.main:app --reload`.
+   Build the four Docker runner images using `backend/README.md` before
+   trying Run or Submit.
+5. Start Vite from the project root with `npm run dev`. Sign-up creates
+   a student account. Admin permissions come from the database role; an
+   account cannot grant itself admin rights in the signup form.
+
+For Compose, root `.env` supplies `POSTGRES_PASSWORD` and `JWT_SECRET_KEY`;
+replace both example values before starting. Compose loads `backend/.env`
+for the API, publishes it at `localhost:8000`, and serves the built site
+at `localhost:8080` through Nginx. The built frontend uses relative `/api`
+requests. Never put Groq credentials in `VITE_*` variables. See
+`deploy/README.md` for the Compose startup steps.
+
+The first RAG or memory request may download/load the configured local
+embedding model. Groq features need a backend-only `GROQ_API_KEY`.
+Password reset has no email/token backend and is unavailable. Dashboard
+and Progress analytics, community comparison, and most interview
+conversation/feedback remain clearly labeled demo/planned features.
 
 ## Folder structure
 
@@ -15,23 +56,30 @@ onto this structure.
 src/
   components/   Sidebar, TopBar, MobileDrawer, NavItem, SearchBar,
                 NotificationsMenu, ProfileMenu, ProtectedRoute,
-                ProblemCard, and components/ui/ (Button, Avatar, Badge,
-                IconButton, EmptyState, Panel, StatCard, FilterChip)
+                AdminRoute (Phase 18), ProblemCard, and components/ui/
+                (Button, Avatar, Badge, IconButton, EmptyState, Panel,
+                StatCard, FilterChip, ReviewSection)
   pages/        Dashboard (Phase 4), Problems + ProblemDetail (Phase
-                5-11, real), AiMentor (Phase 12/13/15, real), Profile
+                5-11/18, real), AiMentor (Phase 12/13/15, real), Profile
                 (Phase 14, real), Progress (Phase 16, real), Interview
-                (Phase 17, real), Practice (Phase 1, real) and
-                pages/auth/ (SignIn, SignUp, ForgotPassword, ResetPassword)
-                — all 7 main nav destinations are real pages now
+                (Phase 17, real), Admin (Phase 18, admin-only), Practice
+                (Phase 1, real) and pages/auth/ (SignIn, SignUp,
+                ForgotPassword, ResetPassword) — all 7 main nav
+                destinations plus the admin-only page are real now
   layouts/      AppShell.jsx (signed-in shell) and AuthLayout.jsx
                 (centered layout for the auth pages)
   hooks/        custom React hooks (empty — later phases)
-  services/     all API/data access lives here, nowhere else
+  services/     all API/data access lives here, nowhere else —
+                includes agentService.js (Phase 15) and
+                interviewService.js (Phase 17)
   utils/        difficulty.js, time.js, communityStats.js, testStatus.js
                 (shared pass/fail check used by AI Review + AI Debugger)
-  data/         navigation.js, dashboardMockData.js, problemsMockData.js,
-                languages.js (shared editor language list)
-  context/      AuthContext.jsx — mock auth state via useAuth()
+  data/         navigation.js, dashboardMockData.js, problemsMockData.js
+                (static seed data), problemStore.js (Phase 18 — the
+                actual mutable catalog everything reads from now),
+                languages.js, progressMockData.js
+  context/      AuthContext.jsx — mock auth state via useAuth(), now
+                including a role ('student' | 'admin', Phase 18)
   features/     larger self-contained feature modules (empty — later phases)
   assets/       icons/images/fonts (empty)
 legacy/
@@ -40,26 +88,11 @@ legacy/
 
 ## Running locally
 
-This sandbox has no internet access, so dependencies could not be
-installed or built here. On your machine:
-
-```bash
-npm install
-npm run dev
-```
-
-Then open the URL Vite prints (usually `http://localhost:5173`). You'll
-land on **Sign in** first now — use "Sign up" (any name/email + a 6+
-character password) or "Sign in" the same way; there's no real backend,
-so any well-formed input works. Once in, use the sidebar (or the ☰ menu
-on a narrow window) to reach Practice, which has the real form.
-
-To produce a production build:
-
-```bash
-npm run build
-npm run preview
-```
+Use the end-to-end setup steps at the top of this README. The frontend
+requires FastAPI at `VITE_API_BASE_URL` (default `http://localhost:8000`)
+and authenticated API access. Local development needs PostgreSQL and
+Docker for problem execution; Groq and the local embedding model are
+needed for AI chat/review and memory/RAG personalization.
 
 ## Design system (Phase 2)
 
@@ -71,20 +104,60 @@ Mono reserved for actual code/technical strings. Built with Tailwind CSS;
 the one deliberate motion moment is the mobile drawer's slide-in
 (Framer Motion) — no per-element hover animations elsewhere.
 
-## Authentication (Phase 3)
+## Authentication and API integration (Phase 25)
 
-Frontend-only mock — no backend or JWT exists yet:
-- Sign in/up accept any input that's the right *shape* (valid-looking
-  email, 6+ character password) and fabricate a user `{ name, email }`.
-  **No password is ever stored** — not in state, not in localStorage.
-- The mock session (name + email only) is kept in `localStorage` just so
-  refreshing the page doesn't log you out while testing. This is a
-  deliberate shortcut for a mock, not a recommendation for real
-  JWTs — see the comment at the top of `src/services/authService.js`.
-- All routes under the main shell are wrapped in `ProtectedRoute`; visiting
-  them signed out redirects to Sign in and returns you to where you were
-  headed after signing in.
-- Log out (in the profile menu) actually clears the mock session now.
+Sign-up and sign-in call FastAPI and store a bearer access token in
+`localStorage`. At startup the frontend validates the token with
+`/api/auth/me`; a 401 clears the session. Student registration cannot set
+the role. Admin-only pages also depend on server-side admin checks.
+Password reset remains unavailable because no reset email/token API is
+implemented. For production, replace browser-readable token storage with
+an httpOnly cookie/session flow and add CSRF protections as appropriate.
+
+## Admin and remaining demos
+
+Admin problem and RAG knowledge management now call protected backend
+CRUD APIs. The browser route guard is for navigation only; server role
+checks provide the security boundary. Dashboard/Progress analytics,
+community comparison, password reset, and the interviewer's opening,
+follow-up, and final feedback remain demo or unavailable features. The
+multi-agent architecture is displayed as planned; Mentor chat currently
+uses one backend endpoint. Code execution accepts complete stdin/stdout
+programs and does not adapt function-only snippets.
+- `problemStore.js` (new) wraps the problem catalog with real
+  `createProblem`/`updateProblem`/`deleteProblem` — Problems,
+  ProblemDetail, and Interview Mode all now read through it, so an
+  admin's changes actually show up there.
+- `ragService.js`'s knowledge base went from `const` to `let` with
+  matching CRUD exports — an admin-added entry is immediately usable by
+  the AI Mentor's real retrieval (Phase 13), in the same session.
+
+I verified both of these are genuinely wired, not just structurally
+present: added a knowledge entry, confirmed a query that previously
+retrieved nothing now retrieves it, deleted it, confirmed retrieval
+goes back to nothing — all by actually calling the functions, not by
+reading the code and assuming it's connected.
+
+**Test cases** (create/hide/unhide) are real *data* on a problem now,
+editable in the admin form with a per-case hidden toggle — but honestly
+labeled as architecture only, since the mock execution engine
+(`submissionService.js`) still simulates pass/fail rather than running
+against real test data. Wiring them together is Phase 21's job (real
+execution), not this one's.
+
+**Generate + review, not generate + auto-publish**: `generateProblemDraft()`
+deliberately produces a rough draft with placeholder example/constraint/
+hint text (`TODO`s throughout) rather than something that looks
+finished — opening straight into the edit form after generating is the
+"review generated problems" step, not a rubber stamp. Verified the
+draft actually respects a requested topic/difficulty and falls back
+sensibly when none is given.
+
+**Difficulty and topics** stay the fixed taxonomies the rest of the app
+already uses (3 difficulties, 14 topics) — the admin form assigns them
+to problems via the same dropdowns rather than allowing arbitrary new
+values that would ripple inconsistency into Dashboard/Progress's
+topic-based charts elsewhere.
 
 ## Interview Mode (Phase 17)
 
@@ -459,34 +532,23 @@ disabled rather than silently doing nothing.
 
 ## What's real vs. mock vs. planned right now
 
-- **Real**: the shell, auth flow and route protection; all 7 main nav
-  pages (Dashboard, Problems/ProblemDetail, AiMentor, Interview,
-  Progress, Profile, Practice); the Monaco editor; the Run/Submit UX;
-  the solving timer and submission history; the AI Review, AI Hints, AI
-  Debugger, AI Mentor, RAG retrieval, User Memory, multi-agent
-  orchestrator, and Interview Mode's *behavior* (grounding in real
-  execution results where applicable, graduated disclosure, real
-  multi-turn conversation history, real keyword-based retrieval feeding
-  real replies, memory genuinely scoped per user, real agent routing
-  with an honest response for agents not yet built, a real timer and a
-  real controlled-hint limit) genuinely works as designed; the Profile
-  page's account panel shows your real (mock) signed-in identity.
-- **Mock**: authentication, every Dashboard/Progress number, the entire
-  problem catalog, Run/Submit's execution results (also what scores an
-  interview), community time-comparison stats, and the content each AI
-  feature ultimately produces (reviews, hints, debug explanations,
-  mentor replies, the RAG knowledge base, AI Memory observations, and
-  interview feedback) — none of this reflects a real backend, database,
-  code execution, or LLM call. All fabricated until Phase 19-24 build
-  the real versions.
-- **Planned, visibly labeled as such**: the Interview/Problem
-  Generator/Analytics *agents* specifically (visible in the AI Team
-  panel, honest when selected that they're not built), and voice input
-  in Interview Mode (architecture only, per the spec's explicit
-  instruction not to build it yet).
-- **Not implemented**: global search (visually present, disabled),
-  notifications (a genuine empty state), a full-solution reveal, real
-  embeddings/ChromaDB (Phase 23), voice interviews, and persistence of
-  anything beyond the current page visit (including AI Memory and
-  Progress's numbers — both recomputed fresh each time, not actually
-  stored) — that needs the real backend (Phase 19+/20/24).
+- **Real backend flows**: JWT signup/sign-in and `/me` validation;
+  server-protected problem and RAG admin APIs; per-user problem status;
+  Docker Run/Submit and persisted submission history; Groq review, hints,
+  debugging, mentor chat, and admin draft generation; Chroma knowledge
+  retrieval and explicitly saved, per-user memory; persisted per-user
+  progress analytics and on-demand AI recommendations.
+- **Still demo or unavailable**: dashboard analytics and
+  community comparisons; interview opening, follow-up, and summary
+  feedback; password reset; notifications; search; full solution reveal;
+  automatic memory extraction; and multi-agent orchestration/critic.
+- **Execution contract**: Docker runs complete programs that read stdin
+  and write stdout. Existing function-only starter snippets are not
+  adapted automatically. Problems without configured test cases return
+  a clear API conflict until an admin adds cases.
+
+The phase notes above this section are a historical build journal. Their
+descriptions of mock behavior reflect the phase in which they were
+written. Phases 26–27 add backend security/error handling and deployment
+preparation; their setup and limits are documented in `backend/README.md`
+and `deploy/README.md`.

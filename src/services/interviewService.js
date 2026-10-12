@@ -23,7 +23,7 @@
  * functionality now.
  */
 
-import { MOCK_PROBLEMS } from '../data/problemsMockData.js'
+import { listProblems } from './problemService.js'
 import { submitSolution } from './submissionService.js'
 import { getHint } from './aiService.js'
 import { isPassingStatus } from '../utils/testStatus.js'
@@ -36,20 +36,15 @@ export const INTERVIEW_TIME_LIMITS_SECONDS = {
 
 export const MAX_HINTS_PER_INTERVIEW = 1
 
-// Interview Mode only draws from problems with a full statement written
-// (Phase 6) — presenting an interview question with no real description
-// would be a worse experience than a smaller, honest question pool.
-const INTERVIEWABLE_PROBLEMS = MOCK_PROBLEMS.filter((p) => Boolean(p.description))
-
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-export function pickInterviewProblem({ difficulty, topic } = {}) {
-  let pool = INTERVIEWABLE_PROBLEMS
+export async function pickInterviewProblem({ difficulty, topic } = {}) {
+  let pool = (await listProblems()).filter((p) => Boolean(p.description))
   if (difficulty) pool = pool.filter((p) => p.difficulty === difficulty)
   if (topic) pool = pool.filter((p) => p.topic === topic)
-  if (pool.length === 0) pool = INTERVIEWABLE_PROBLEMS // fall back rather than returning nothing
+  if (pool.length === 0) throw new Error('No backend problems match those interview filters.')
   return pool[Math.floor(Math.random() * pool.length)]
 }
 
@@ -105,8 +100,11 @@ export async function getControlledHint(problem) {
  * interview feedback. Never claims the code passed unless the mock
  * execution result actually says so — same rule as Phase 10/11.
  */
-export async function finishInterview({ problem, code, starterCode, timeTakenSeconds, timeLimitSeconds, hintsUsed }) {
-  const executionResult = await submitSolution({ code, starterCode, difficulty: problem.difficulty })
+export async function finishInterview({ problem, code, language, timeTakenSeconds, timeLimitSeconds, hintsUsed }) {
+  const executionResult = await submitSolution({
+    problemId: problem.id, code, language,
+    solvingTime: timeTakenSeconds,
+  })
   await delay(900)
 
   const withinTime = timeTakenSeconds <= timeLimitSeconds

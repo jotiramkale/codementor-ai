@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { FiCpu, FiEdit2, FiPlus, FiTrash2 } from 'react-icons/fi'
 import Panel from '../components/ui/Panel.jsx'
 import Badge from '../components/ui/Badge.jsx'
@@ -6,7 +6,7 @@ import Button from '../components/ui/Button.jsx'
 import FilterChip from '../components/ui/FilterChip.jsx'
 import { toneForDifficulty } from '../utils/difficulty.js'
 import { DIFFICULTIES, TOPICS, DEFAULT_STARTER_CODE } from '../data/problemsMockData.js'
-import { getProblems, createProblem, updateProblem, deleteProblem } from '../data/problemStore.js'
+import { createProblem, deleteProblem, getAdminProblemById, listAdminProblems, updateProblem } from '../services/problemService.js'
 import {
   listKnowledgeEntries,
   addKnowledgeEntry,
@@ -41,24 +41,36 @@ function emptyProblemForm() {
 }
 
 function emptyKnowledgeForm() {
-  return { domain: KNOWLEDGE_DOMAINS[0], title: '', content: '', keywords: '' }
+  return { domain: KNOWLEDGE_DOMAINS[0], title: '', content: '' }
 }
 
-// Phase 18: admin-only (see AdminRoute.jsx + navigation.js's
-// requiresAdmin flag). Problem CRUD writes through problemStore.js and
-// knowledge CRUD through ragService.js's exported functions — both
-// genuinely mutable stores (Phase 18 also converted them from static
-// consts), so changes made here actually show up on Problems,
-// ProblemDetail, Interview Mode, and the AI Mentor's retrieval in the
-// same session. There's no live-push subscription, so a page already
-// open elsewhere won't refresh instantly — navigating to it will.
+// Server permissions and the authenticated admin API protect persisted
+// problem and shared knowledge management.
 function Admin() {
   const [, setRefreshTick] = useState(0)
   function bumpRefresh() {
     setRefreshTick((n) => n + 1)
   }
 
-  const [tab, setTab] = useState('problems') // 'problems' | 'knowledge'
+  const [tab, setTab] = useState('problems')
+  const [problems, setProblems] = useState([])
+  const [knowledgeEntries, setKnowledgeEntries] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [pageError, setPageError] = useState('')
+
+  async function refreshProblems() {
+    setPageError('')
+    try { setProblems(await listAdminProblems()) } catch (error) { setPageError(error.message) }
+  }
+
+  async function refreshKnowledge() {
+    setPageError('')
+    try { setKnowledgeEntries(await listKnowledgeEntries()) } catch (error) { setPageError(error.message) }
+  }
+
+  useEffect(() => {
+    Promise.all([refreshProblems(), refreshKnowledge()]).finally(() => setIsLoading(false))
+  }, [])
 
   // --- Problems ---
   const [problemView, setProblemView] = useState('list') // 'list' | 'form'
@@ -68,36 +80,32 @@ function Admin() {
   const [genTopic, setGenTopic] = useState('')
   const [genDifficulty, setGenDifficulty] = useState('')
 
-  const problems = getProblems()
-
   function startCreateProblem() {
     setEditingProblemId(null)
     setProblemForm(emptyProblemForm())
     setProblemView('form')
   }
 
-  function startEditProblem(problem) {
-    setEditingProblemId(problem.id)
-    setProblemForm({
-      title: problem.title,
-      difficulty: problem.difficulty,
-      topic: problem.topic,
-      estimatedTime: problem.estimatedTime,
-      description: problem.description || '',
-      expectedInput: problem.expectedInput || '',
-      expectedOutput: problem.expectedOutput || '',
-      examples: problem.examples?.length ? problem.examples : [{ input: '', output: '', explanation: '' }],
-      constraints: problem.constraints?.length ? problem.constraints : [''],
-      hints: problem.hints?.length ? problem.hints : [''],
-      starterCode: problem.starterCode || { ...DEFAULT_STARTER_CODE },
-      testCases: problem.testCases?.length ? problem.testCases : [{ input: '', expectedOutput: '', hidden: false }],
-    })
-    setProblemView('form')
+  async function startEditProblem(problem) {
+    try {
+      const saved = await getAdminProblemById(problem.id)
+      setEditingProblemId(saved.id)
+      setProblemForm({
+        title: saved.title, difficulty: saved.difficulty, topic: saved.topic,
+        estimatedTime: saved.estimatedTime, description: saved.description || '',
+        expectedInput: saved.expectedInput || '', expectedOutput: saved.expectedOutput || '',
+        examples: saved.examples?.length ? saved.examples : [{ input: '', output: '', explanation: '' }],
+        constraints: saved.constraints?.length ? saved.constraints : [''],
+        hints: saved.hints?.length ? saved.hints : [''],
+        starterCode: saved.starterCode || { ...DEFAULT_STARTER_CODE },
+        testCases: saved.testCases?.length ? saved.testCases : [{ input: '', expectedOutput: '', hidden: false }],
+      })
+      setProblemView('form')
+    } catch (error) { setPageError(error.message) }
   }
 
-  function handleDeleteProblem(id) {
-    deleteProblem(id)
-    bumpRefresh()
+  async function handleDeleteProblem(id) {
+    try { await deleteProblem(id); await refreshProblems(); bumpRefresh() } catch (error) { setPageError(error.message) }
   }
 
   function updateExample(index, field, value) {
@@ -153,17 +161,19 @@ function Admin() {
       setProblemForm({
         ...emptyProblemForm(),
         ...result.draft,
-        starterCode: { ...DEFAULT_STARTER_CODE },
-        testCases: [{ input: '', expectedOutput: '', hidden: false }],
+        starterCode: result.draft.starterCode || { ...DEFAULT_STARTER_CODE },
+        testCases: result.draft.testCases?.length ? result.draft.testCases : [{ input: '', expectedOutput: '', hidden: false }],
       })
       setEditingProblemId(null)
       setProblemView('form')
+    } catch (error) {
+      setPageError(error.message)
     } finally {
       setIsGenerating(false)
     }
   }
 
-  function handleSaveProblem(e) {
+  async function handleSaveProblem(e) {
     e.preventDefault()
     const payload = {
       ...problemForm,
@@ -172,21 +182,19 @@ function Admin() {
       examples: problemForm.examples.filter((ex) => ex.input.trim() !== '' || ex.output.trim() !== ''),
       testCases: problemForm.testCases.filter((tc) => tc.input.trim() !== '' || tc.expectedOutput.trim() !== ''),
     }
-    if (editingProblemId) {
-      updateProblem(editingProblemId, payload)
-    } else {
-      createProblem(payload)
-    }
-    bumpRefresh()
-    setProblemView('list')
+    try {
+      if (editingProblemId) await updateProblem(editingProblemId, payload)
+      else await createProblem(payload)
+      await refreshProblems()
+      bumpRefresh()
+      setProblemView('list')
+    } catch (error) { setPageError(error.message) }
   }
 
   // --- Knowledge base ---
   const [knowledgeView, setKnowledgeView] = useState('list')
   const [editingKnowledgeId, setEditingKnowledgeId] = useState(null)
   const [knowledgeForm, setKnowledgeForm] = useState(emptyKnowledgeForm())
-
-  const knowledgeEntries = listKnowledgeEntries()
 
   function startCreateKnowledge() {
     setEditingKnowledgeId(null)
@@ -196,29 +204,24 @@ function Admin() {
 
   function startEditKnowledge(entry) {
     setEditingKnowledgeId(entry.id)
-    setKnowledgeForm({ domain: entry.domain, title: entry.title, content: entry.content, keywords: entry.keywords.join(', ') })
+    setKnowledgeForm({ domain: entry.domain, title: entry.title, content: entry.content })
     setKnowledgeView('form')
   }
 
-  function handleDeleteKnowledge(id) {
-    deleteKnowledgeEntry(id)
-    bumpRefresh()
+  async function handleDeleteKnowledge(id) {
+    try { await deleteKnowledgeEntry(id); await refreshKnowledge(); bumpRefresh() } catch (error) { setPageError(error.message) }
   }
 
-  function handleSaveKnowledge(e) {
+  async function handleSaveKnowledge(e) {
     e.preventDefault()
-    const keywords = knowledgeForm.keywords
-      .split(',')
-      .map((k) => k.trim())
-      .filter(Boolean)
-    const payload = { domain: knowledgeForm.domain, title: knowledgeForm.title, content: knowledgeForm.content, keywords }
-    if (editingKnowledgeId) {
-      updateKnowledgeEntry(editingKnowledgeId, payload)
-    } else {
-      addKnowledgeEntry(payload)
-    }
-    bumpRefresh()
-    setKnowledgeView('list')
+    const payload = { domain: knowledgeForm.domain, title: knowledgeForm.title, content: knowledgeForm.content }
+    try {
+      if (editingKnowledgeId) await updateKnowledgeEntry(editingKnowledgeId, payload)
+      else await addKnowledgeEntry(payload)
+      await refreshKnowledge()
+      bumpRefresh()
+      setKnowledgeView('list')
+    } catch (error) { setPageError(error.message) }
   }
 
   return (
@@ -230,6 +233,9 @@ function Admin() {
           if they visit this URL directly.
         </p>
       </header>
+
+      {pageError && <p role="alert" className="mb-4 rounded-lg border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-300">{pageError}</p>}
+      {isLoading && <p className="mb-4 text-sm text-zinc-500">Loading admin data…</p>}
 
       <div className="mb-4 flex gap-2">
         <FilterChip label="Problems" isActive={tab === 'problems'} onClick={() => setTab('problems')} />
@@ -275,9 +281,8 @@ function Admin() {
               </Button>
             </div>
             <p className="mt-2 text-xs text-zinc-600">
-              Produces a deliberately rough draft (placeholder example, constraint, hint) — the point is
-              that you review and rewrite it before publishing, not rubber-stamp something already
-              finished. No real AI is connected yet (Phase 22).
+              Groq creates an unverified draft. Review the statement, examples, constraints, hints, and
+              starter code before saving it. Generation does not execute or verify the draft.
             </p>
           </Panel>
 
@@ -499,8 +504,7 @@ function Admin() {
               <div>
                 <div className="mb-1.5 flex items-center justify-between">
                   <label className="text-xs text-zinc-500">
-                    Test cases (architecture only — not yet consumed by the mock execution engine; see
-                    Phase 21)
+                    Test cases (persisted in PostgreSQL and consumed by the Docker judge)
                   </label>
                   <button type="button" onClick={addTestCase} className="text-xs text-indigo-400 hover:text-indigo-300">
                     + Add test case
@@ -564,6 +568,9 @@ function Admin() {
             </Button>
           }
         >
+          <p className="mb-4 rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-xs text-zinc-500">
+            Knowledge entries are persisted in the separate ChromaDB collection used by Mentor retrieval.
+          </p>
           <div className="flex flex-col divide-y divide-zinc-800">
             {knowledgeEntries.map((entry) => (
               <div key={entry.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
@@ -639,24 +646,9 @@ function Admin() {
                 />
               </div>
 
-              <div>
-                <label className="mb-1.5 block text-xs text-zinc-500">Keywords (comma-separated)</label>
-                <input
-                  value={knowledgeForm.keywords}
-                  onChange={(e) => setKnowledgeForm((prev) => ({ ...prev, keywords: e.target.value }))}
-                  placeholder="two pointer, two pointers"
-                  className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
-                />
-                <p className="mt-1 text-xs text-zinc-600">
-                  Used by the AI Mentor's keyword retriever (Phase 13) to decide when this entry is
-                  relevant to a question.
-                </p>
-              </div>
-
               <div className="rounded-lg border border-dashed border-zinc-800 p-2.5 text-xs text-zinc-500">
-                Source is always set to "CodeMentor AI knowledge base (demo entry)" — this form
-                deliberately doesn't let you type a citation to an external book or site, so it can't
-                become a way around the "no fake citations" rule this feature was built around.
+                Provenance is recorded as an admin-authored CodeMentor learning note. Add an external
+                URL only when the entry content genuinely comes from that source.
               </div>
 
               <div className="flex gap-2">

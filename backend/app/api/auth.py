@@ -1,9 +1,9 @@
 """
 app/api/auth.py
 
-Real, complete logic — not a stub. Signup/signin don't depend on
-anything not yet built (no Groq, no execution sandbox, no ChromaDB),
-just a running Postgres instance, which this sandbox can't reach.
+Real, complete logic — not a stub. Signup/signin don't depend on AI,
+Docker, or Chroma service initialization; they need a running Postgres
+instance, which this sandbox can't reach.
 This code is ready to run the moment Phase 20's migrations are applied
 against a real database; it just hasn't been executed here.
 """

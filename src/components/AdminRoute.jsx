@@ -7,8 +7,9 @@ import { useAuth } from '../context/AuthContext.jsx'
 // admin UI and not just hidden a nav link that would still be
 // reachable by URL.
 function AdminRoute({ children }) {
-  const { user } = useAuth()
+  const { user, isLoading } = useAuth()
 
+  if (isLoading) return <div className="p-8 text-sm text-zinc-400">Checking your session…</div>
   if (user?.role !== 'admin') {
     return <Navigate to="/dashboard" replace />
   }

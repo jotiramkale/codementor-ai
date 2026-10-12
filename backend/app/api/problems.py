@@ -18,7 +18,7 @@ from app.models.problem import Problem
 from app.models.test_case import TestCase
 from app.models.user import User
 from app.models.user_problem_stats import UserProblemStats
-from app.schemas.problem import ProblemCreate, ProblemOut, ProblemUpdate
+from app.schemas.problem import ProblemCreate, ProblemOut, ProblemUpdate, TestCaseOut
 
 router = APIRouter(prefix="/api/problems", tags=["problems"])
 
@@ -70,6 +70,18 @@ def get_problem(
     return _to_problem_out(problem, stats)
 
 
+@router.get("/{problem_id}/test-cases", response_model=list[TestCaseOut])
+def list_problem_test_cases(
+    problem_id: int,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin_user),
+) -> list[TestCaseOut]:
+    """Admins need persisted cases to edit a problem; students never receive hidden case data."""
+    if db.get(Problem, problem_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Problem not found.")
+    return db.query(TestCase).filter(TestCase.problem_id == problem_id).order_by(TestCase.id.asc()).all()
+
+
 @router.post("", response_model=ProblemOut, status_code=status.HTTP_201_CREATED)
 def create_problem(
     payload: ProblemCreate, db: Session = Depends(get_db), _admin: User = Depends(get_current_admin_user)
@@ -112,6 +124,21 @@ def update_problem(
     for field, value in payload.model_dump(exclude={"test_cases", "examples"}).items():
         setattr(problem, field, value)
     problem.examples = [e.model_dump() if hasattr(e, "model_dump") else e for e in payload.examples]
+
+    # An omitted test_cases field preserves existing cases; an explicit []
+    # clears them. Replacing the whole set keeps hidden flags and output
+    # pairs consistent with the problem version the judge will execute.
+    if "test_cases" in payload.model_fields_set:
+        db.query(TestCase).filter(TestCase.problem_id == problem_id).delete(synchronize_session=False)
+        for test_case in payload.test_cases:
+            db.add(
+                TestCase(
+                    problem_id=problem.id,
+                    input=test_case.input,
+                    expected_output=test_case.expected_output,
+                    hidden=test_case.hidden,
+                )
+            )
 
     db.commit()
     db.refresh(problem)

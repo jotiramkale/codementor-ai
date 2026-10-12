@@ -1,28 +1,27 @@
 """
 app/schemas/submission.py
 
-Matches submissionService.js's mock shapes field for field —
-runSample()'s and submitSolution()'s return values become these
-response models. The status strings ('Accepted' | 'Wrong Answer' |
-'Runtime Error', and 'passed' | 'failed' | 'error' for sample runs) are
-kept identical on purpose so nothing on the frontend has to change its
-string comparisons once this is real.
+Keeps the existing frontend response field names for the later API
+integration, while adding objective Docker judge outcomes. The frontend
+still calls its mock service in this phase.
 """
 
-from pydantic import BaseModel
+from typing import Literal
+
+from pydantic import BaseModel, Field
 
 
 class RunRequest(BaseModel):
-    problem_id: int
-    code: str
-    language: str
+    problem_id: int = Field(gt=0)
+    code: str = Field(min_length=1, max_length=262144)
+    language: Literal["python", "javascript", "java", "cpp"]
 
 
 class SubmitRequest(BaseModel):
-    problem_id: int
-    code: str
-    language: str
-    solving_time: int | None = None  # seconds, from the frontend's Phase 9 timer
+    problem_id: int = Field(gt=0)
+    code: str = Field(min_length=1, max_length=262144)
+    language: Literal["python", "javascript", "java", "cpp"]
+    solving_time: int | None = Field(default=None, ge=0)  # seconds, from the frontend's Phase 9 timer
 
 
 class SampleTestResult(BaseModel):
@@ -36,15 +35,29 @@ class SampleTestResult(BaseModel):
 
 class RunResult(BaseModel):
     status: str  # 'passed' | 'failed' | 'error'
-    tests: list[SampleTestResult] = []
+    tests: list[SampleTestResult] = Field(default_factory=list)
     error: str | None = None
 
 
 class SubmissionResult(BaseModel):
     id: int
-    status: str  # 'Accepted' | 'Wrong Answer' | 'Runtime Error'
+    # Accepted | Wrong Answer | Compilation Error | Runtime Error |
+    # Time Limit Exceeded | Memory Limit Exceeded | Output Limit Exceeded
+    status: str
     passed_tests: int
     total_tests: int
     runtime_ms: float | None = None
     memory_mb: float | None = None
     failure_detail: str | None = None
+
+
+class SubmissionHistoryOut(BaseModel):
+    id: int
+    problem_id: int
+    status: str
+    language: str
+    runtime_ms: float | None = None
+    memory_mb: float | None = None
+    solving_time: int | None = None
+    attempt_number: int
+    created_at: str

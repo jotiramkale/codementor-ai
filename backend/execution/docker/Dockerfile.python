@@ -1,0 +1,6 @@
+FROM python:3.12-slim-bookworm
+
+USER root
+COPY execution/docker/runner.py /opt/codementor/runner.py
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+WORKDIR /opt/codementor

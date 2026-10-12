@@ -1,17 +1,25 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 import * as authService from '../services/authService.js'
 
 const AuthContext = createContext(null)
 
-/**
- * Phase 3: mock auth state, shared app-wide. Session is read
- * synchronously from localStorage on first render (no loading flicker
- * before deciding whether to redirect to sign-in). See authService.js
- * for why localStorage is fine for this mock but not the final plan
- * for real JWTs.
- */
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => authService.getStoredSession())
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    let active = true
+    authService.restoreSession()
+      .then((restored) => { if (active) setUser(restored) })
+      .catch(() => { if (active) setUser(null) })
+      .finally(() => { if (active) setIsLoading(false) })
+    const onUnauthorized = () => setUser(null)
+    window.addEventListener('codementor:unauthorized', onUnauthorized)
+    return () => {
+      active = false
+      window.removeEventListener('codementor:unauthorized', onUnauthorized)
+    }
+  }, [])
 
   async function signIn(credentials) {
     const loggedInUser = await authService.signIn(credentials)
@@ -32,6 +40,7 @@ export function AuthProvider({ children }) {
 
   const value = {
     user,
+    isLoading,
     isAuthenticated: Boolean(user),
     signIn,
     signUp,

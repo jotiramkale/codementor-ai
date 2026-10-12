@@ -8,23 +8,18 @@ import ReviewSection from '../components/ui/ReviewSection.jsx'
 import CodeEditor from '../components/CodeEditor.jsx'
 import { toneForDifficulty } from '../utils/difficulty.js'
 import { formatDuration, formatShortDateTime } from '../utils/time.js'
-import { communityStatsForProblem, estimatePercentile } from '../utils/communityStats.js'
 import { DEFAULT_STARTER_CODE } from '../data/problemsMockData.js'
-import { getProblemById } from '../data/problemStore.js'
+import { getProblemById } from '../services/problemService.js'
 import { labelForLanguage } from '../data/languages.js'
-import { runSample, submitSolution } from '../services/submissionService.js'
+import { getSubmissionHistory, runSample, submitSolution } from '../services/submissionService.js'
 import { reviewSubmission, getHint, debugError } from '../services/aiService.js'
 import { isPassingStatus } from '../utils/testStatus.js'
 
-// Phase 10: adds the full AI Review panel (Overall Assessment, Bug
-// Analysis, Time/Space Complexity, Code Quality, Suggested Improvement,
-// Learning Tip) on top of Phase 9's timer/history. Still entirely
-// mocked — see services/aiService.js's reviewSubmission() for the rule
-// this feature's honesty rests on: never claim code passed tests unless
-// a real Run/Submit result says so.
 function ProblemDetail() {
   const { id } = useParams()
-  const problem = getProblemById(id)
+  const [problem, setProblem] = useState(null)
+  const [isProblemLoading, setIsProblemLoading] = useState(true)
+  const [problemError, setProblemError] = useState('')
 
   const starterCode = problem?.starterCode || DEFAULT_STARTER_CODE
   const [language, setLanguage] = useState('python')
@@ -36,6 +31,7 @@ function ProblemDetail() {
   const [runResult, setRunResult] = useState(null)
   const [submitResult, setSubmitResult] = useState(null)
   const [submissionHistory, setSubmissionHistory] = useState([])
+  const [actionError, setActionError] = useState('')
 
   const [isReviewing, setIsReviewing] = useState(false)
   const [aiReview, setAiReview] = useState(null)
@@ -49,18 +45,32 @@ function ProblemDetail() {
 
   // started_at for this problem-solving session. Resets if you navigate
   // away and back (a fresh page load), since nothing persists it yet.
-  const [startedAt] = useState(() => Date.now())
+  const [startedAt, setStartedAt] = useState(() => Date.now())
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
+    let active = true
+    setIsProblemLoading(true)
+    getProblemById(id)
+      .then((loaded) => {
+        if (!active) return
+        setProblem(loaded)
+        setCodeByLanguage((current) => ({ ...current, ...loaded.starterCode }))
+        setStartedAt(Date.now())
+      })
+      .catch((error) => { if (active) setProblemError(error.message) })
+      .finally(() => { if (active) setIsProblemLoading(false) })
+    getSubmissionHistory(id).then((history) => { if (active) setSubmissionHistory(history) }).catch(() => {})
     const interval = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(interval)
-  }, [])
+    return () => { active = false; clearInterval(interval) }
+  }, [id])
+
+  if (isProblemLoading) return <p className="py-12 text-center text-sm text-zinc-500">Loading problem…</p>
 
   if (!problem) {
     return (
       <div className="rounded-xl border border-dashed border-zinc-800 px-6 py-16 text-center">
-        <p className="text-sm text-zinc-400">Problem not found in the demo catalog.</p>
+        <p className="text-sm text-zinc-400">{problemError || 'Problem not found.'}</p>
         <Link to="/problems" className="mt-3 inline-block text-sm text-indigo-400 hover:text-indigo-300">
           Back to Problems
         </Link>
@@ -71,7 +81,6 @@ function ProblemDetail() {
   const hasFullDetail = Boolean(problem.description)
   const currentCode = codeByLanguage[language]
   const elapsedSeconds = Math.floor((now - startedAt) / 1000)
-  const communityStats = communityStatsForProblem(problem)
   const latestTestResults = normalizeTestResultsForReview()
   const hasRecentFailure = Boolean(latestTestResults && !isPassingStatus(latestTestResults.status))
 
@@ -88,11 +97,14 @@ function ProblemDetail() {
     setSubmitResult(null)
     try {
       const result = await runSample({
+        problemId: problem.id,
         code: currentCode,
-        starterCode: starterCode[language],
-        examples: problem.examples,
+        language,
       })
       setRunResult(result)
+      setActionError('')
+    } catch (error) {
+      setActionError(error.message)
     } finally {
       setIsRunning(false)
     }
@@ -105,25 +117,16 @@ function ProblemDetail() {
     const solvingSeconds = Math.floor((submittedAt - startedAt) / 1000)
     try {
       const result = await submitSolution({
+        problemId: problem.id,
         code: currentCode,
-        starterCode: starterCode[language],
-        difficulty: problem.difficulty,
+        language,
+        solvingTime: solvingSeconds,
       })
-      const attemptNumber = submissionHistory.length + 1
       setSubmitResult({ ...result, solvingSeconds })
-      setSubmissionHistory((prev) => [
-        {
-          id: attemptNumber,
-          attemptNumber,
-          status: result.status,
-          language,
-          runtimeMs: result.runtimeMs,
-          memoryMb: result.memoryMb,
-          solvingSeconds,
-          date: new Date(submittedAt),
-        },
-        ...prev,
-      ])
+      setSubmissionHistory(await getSubmissionHistory(problem.id))
+      setActionError('')
+    } catch (error) {
+      setActionError(error.message)
     } finally {
       setIsSubmitting(false)
     }
@@ -160,6 +163,7 @@ function ProblemDetail() {
     setAiReviewError('')
     try {
       const result = await reviewSubmission({
+        problemId: problem.id,
         problemStatement: problem.description || `${problem.title} (${problem.topic}, ${problem.difficulty})`,
         code: currentCode,
         language,
@@ -178,6 +182,9 @@ function ProblemDetail() {
     try {
       const result = await getHint({ problem, hintLevel: level })
       setRevealedHints((prev) => [...prev, { level, content: result.content }])
+      setActionError('')
+    } catch (error) {
+      setActionError(error.message)
     } finally {
       setIsLoadingHint(false)
     }
@@ -187,11 +194,15 @@ function ProblemDetail() {
     setIsDebugging(true)
     try {
       const result = await debugError({
+        problemId: problem.id,
         code: currentCode,
         language,
         testResults: normalizeTestResultsForReview(),
       })
       setDebugResult(result)
+      setActionError('')
+    } catch (error) {
+      setActionError(error.message)
     } finally {
       setIsDebugging(false)
     }
@@ -283,8 +294,7 @@ function ProblemDetail() {
                 </Button>
               ) : (
                 <p className="text-xs text-zinc-600">
-                  That's as far as hints go in this demo — a full worked solution isn't offered yet
-                  (Phase 22 will let you ask for one explicitly, separately from hints).
+                  That's as far as graduated hints go. A full worked solution endpoint is not available.
                 </p>
               )}
             </div>
@@ -319,8 +329,9 @@ function ProblemDetail() {
               </Button>
             </div>
             <p className="mt-2 text-xs text-zinc-600">
-              Simulated results — no real compiler or sandbox runs this code yet (Phase 21).
+              Run and Submit execute the complete program in the backend Docker sandbox. Your program must read input from standard input; function-only snippets are not adapted. Hidden test details are not returned.
             </p>
+            {actionError && <p role="alert" className="mt-3 rounded-lg border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-300">{actionError}</p>}
           </Panel>
 
           {runResult && (
@@ -353,6 +364,7 @@ function ProblemDetail() {
                             Expected: <span className="text-zinc-300">{test.expectedOutput}</span>
                           </p>
                           {!test.passed && <p className="text-red-300">Got a different result</p>}
+                          {test.actualOutput != null && <p>Actual: <span className="text-zinc-300">{test.actualOutput}</span></p>}
                         </div>
                       )}
                     </div>
@@ -380,10 +392,7 @@ function ProblemDetail() {
                       <p className="text-xs text-zinc-500">Runtime</p>
                       <p className="text-zinc-200">{submitResult.runtimeMs} ms</p>
                     </div>
-                    <div>
-                      <p className="text-xs text-zinc-500">Memory</p>
-                      <p className="text-zinc-200">{submitResult.memoryMb} MB</p>
-                    </div>
+                    {submitResult.memoryMb != null && <div><p className="text-xs text-zinc-500">Memory</p><p className="text-zinc-200">{submitResult.memoryMb} MB</p></div>}
                   </div>
                 ) : (
                   <div className="rounded-lg border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-300">
@@ -393,30 +402,11 @@ function ProblemDetail() {
 
                 {submitResult.status === 'Accepted' && (
                   <div className="border-t border-zinc-800 pt-3">
-                    <p className="mb-2 text-xs font-medium text-zinc-500">
-                      How you compare (demo data — no real community submissions exist yet)
-                    </p>
+                    <p className="mb-2 text-xs font-medium text-zinc-500">Your persisted solving time</p>
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                       <div>
                         <p className="text-xs text-zinc-500">Your time</p>
                         <p className="text-zinc-200">{formatDuration(submitResult.solvingSeconds)}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-zinc-500">Community median</p>
-                        <p className="font-semibold text-zinc-100">
-                          {formatDuration(communityStats.medianSeconds)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-zinc-500">Community average</p>
-                        <p className="text-zinc-400">{formatDuration(communityStats.averageSeconds)}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-zinc-500">Percentile</p>
-                        <p className="text-zinc-200">
-                          Faster than{' '}
-                          {estimatePercentile(submitResult.solvingSeconds, communityStats.medianSeconds)}%
-                        </p>
                       </div>
                     </div>
                   </div>
@@ -517,8 +507,7 @@ function ProblemDetail() {
             </table>
           </div>
           <p className="mt-3 text-xs text-zinc-600">
-            Kept only for this visit to the page — real persisted history arrives with the backend
-            (Phase 19+/20).
+            Loaded from your authenticated submission history. Hidden test inputs and outputs are never exposed.
           </p>
         </Panel>
       )}

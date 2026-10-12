@@ -1,0 +1,16 @@
+.git
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+**/.venv
+**/venv
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/chroma_data
+node_modules
+dist
+coverage

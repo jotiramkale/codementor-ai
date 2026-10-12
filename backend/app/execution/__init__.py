@@ -1,12 +1,6 @@
-"""
-app/execution — not implemented yet.
+"""Real, isolated code execution used by the submission API (Phase 21).
 
-The real Docker sandbox: timeout, memory limit, CPU limit, restricted
-filesystem, network restrictions, process isolation, cleanup, and a
-maximum output size — per the original spec's "Code Execution
-Security" section. This replaces submissionService.js's mock
-Math.random()-based pass/fail simulation (Phase 8) with an engine that
-actually compiles/runs untrusted code against real test_cases rows
-(see app/models/test_case.py) and returns a genuine result. Treat
-user-submitted code as untrusted, always. Planned for Phase 21.
+The API process only talks to Docker; submitted source is compiled and run
+inside disposable, resource-limited containers. There is deliberately no
+local-process fallback.
 """
